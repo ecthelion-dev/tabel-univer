@@ -24,7 +24,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .grow{flex:1}
 .ctl{display:flex;align-items:center;gap:6px}
 .ctl label{font-size:12px;color:var(--muted)}
-select,input[type=text],input[type=number],input[type=date],textarea{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:6px 8px;min-width:0}
+select,input[type=text],input[type=number],input[type=date],input[type=password],textarea{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:6px 8px;min-width:0}
 textarea{width:100%;min-height:110px;font-family:var(--font-mono);font-size:13px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .btn{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:6px 12px;cursor:pointer;white-space:nowrap}
@@ -96,6 +96,22 @@ table.tab th.fix,table.tab td.fix{position:sticky;left:0;background:var(--paper)
 .frozen{background:var(--st-ok-bg);color:var(--st-ok);border-radius:6px;padding:7px 12px;margin:0 0 10px;font-size:13px}
 #whoami{font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mini{padding:3px 8px;font-size:12px}
+.login{width:min(460px,100%);padding:22px 22px 20px;display:grid;gap:14px}
+.login h2{margin:0;font-size:21px;text-wrap:balance}
+.roles{border:0;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0}
+.roles legend,.lf>label{font-size:13px;font-weight:600;color:var(--ink);padding:0;margin-bottom:6px}
+.rc{position:relative;display:grid;gap:2px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;font-size:12px;line-height:1.35;color:var(--muted);background:var(--surface)}
+.rc b{color:var(--ink);font-size:13px;font-weight:600}
+.rc input{position:absolute;opacity:0;pointer-events:none}
+.rc:has(input:checked){border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.rc:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.lf{display:grid;gap:4px;min-width:0}
+.lf select,.lf input{width:100%;padding:9px 10px}
+.lf small{color:var(--muted);font-size:12px}
+.pw{display:flex;gap:6px}.pw input{flex:1;min-width:0}
+#l_err{color:var(--st-ret);font-size:13px;min-height:0}#l_err:empty{display:none}
+#l_go{width:100%;padding:10px}
+@media (max-width:440px){.roles{grid-template-columns:1fr}}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
 .seg button{border:0;background:none;padding:6px 12px;cursor:pointer;color:var(--muted);font:inherit;white-space:nowrap}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
@@ -123,17 +139,21 @@ table.tab th.fix,table.tab td.fix{position:sticky;left:0;background:var(--paper)
   <main id="view"></main>
 </div>
 <div id="panel" role="dialog" aria-modal="true"><div class="sheet" id="sheet"></div></div>
-<div id="login" hidden style="position:fixed;inset:0;z-index:40;background:var(--bg);display:none;align-items:center;justify-content:center;padding:16px">
-  <form class="card" id="loginForm" style="width:min(380px,100%)">
-    <h2 style="margin:0 0 4px;font-size:20px">Tabel tizimi</h2><div class="note" id="loginInst">Kirish</div>
-    <div class="frm" style="grid-template-columns:1fr">
-      <label>Rol<select id="l_role"><option value="mudir">Bo'lim mudiri</option><option value="kadr">Kadrlar bo'limi</option><option value="buxg">Buxgalter</option><option value="admin">Admin</option></select></label>
-      <label id="l_deptw">Bo'lim<select id="l_dept"></select></label>
-      <label>Ismingiz (F.I.Sh.)<input type="text" id="l_name" autocomplete="name" placeholder="Masalan: Karimov A."></label>
-      <label>Parol<input type="password" id="l_pass" autocomplete="current-password"></label>
-    </div>
-    <div id="l_err" style="color:var(--st-ret);min-height:20px;font-size:13px"></div>
-    <button class="btn pri" type="submit" style="width:100%">Kirish</button>
+<div id="login" hidden style="position:fixed;inset:0;z-index:40;background:var(--bg);display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:max(24px,6vh) 16px 24px">
+  <form class="card login" id="loginForm" novalidate>
+    <h2>Tabel tizimiga kirish</h2>
+    <p class="note" style="margin:2px 0 0">Ish vaqti hisobi: bo'limlar tabelni to'ldiradi, kadrlar bo'limi tasdiqlaydi.</p>
+    <fieldset class="roles"><legend>1. Siz kimsiz?</legend>
+      <label class="rc"><input type="radio" name="l_role" value="mudir" checked><b>Bo'lim / kafedra mudiri</b><span>O'z bo'limi tabelini to'ldiradi va topshiradi</span></label>
+      <label class="rc"><input type="radio" name="l_role" value="kadr"><b>Kadrlar bo'limi</b><span>Tabellarni tekshiradi va tasdiqlaydi</span></label>
+      <label class="rc"><input type="radio" name="l_role" value="buxg"><b>Buxgalteriya</b><span>Tasdiqlangan tabellarni ko'radi va yuklab oladi</span></label>
+      <label class="rc"><input type="radio" name="l_role" value="admin"><b>Administrator</b><span>Bo'limlar, sozlamalar va parollar</span></label>
+    </fieldset>
+    <div class="lf" id="l_deptw"><label for="l_dept">2. Bo'limingiz (kafedrangiz)</label><select id="l_dept"></select><small>Bo'limingiz ro'yxatda bo'lmasa, administratorga murojaat qiling.</small></div>
+    <div class="lf"><label for="l_name"><span class="lnum">3.</span> Ismingiz (F.I.Sh.)</label><input type="text" id="l_name" autocomplete="name" placeholder="Masalan: Karimov Aziz"><small>Jurnalda kim nimani o'zgartirgani shu ism bilan ko'rinadi.</small></div>
+    <div class="lf"><label for="l_pass"><span class="lnum">4.</span> Parol</label><div class="pw"><input type="password" id="l_pass" autocomplete="current-password"><button type="button" class="btn" id="l_eye" aria-label="Parolni ko'rsatish">Ko'rsatish</button></div><small id="l_passhint"></small></div>
+    <div id="l_err" role="alert"></div>
+    <button class="btn pri" type="submit" id="l_go">Kirish</button>
   </form></div>
 <div id="toast" role="status"></div>
 
@@ -180,17 +200,33 @@ async function getDl(){
 }
 async function showLogin(){
   const box=$("#login");box.style.display="flex";box.hidden=false;
+  const role=()=>(document.querySelector('input[name="l_role"]:checked')||{}).value||"mudir";
+  const HINT={mudir:"Parolni kadrlar bo'limi yoki administrator beradi. Har bir bo'limning o'z paroli bor.",kadr:"Kadrlar bo'limining umumiy paroli. Administratordan oling.",buxg:"Buxgalteriyaning umumiy paroli. Administratordan oling.",admin:"Tizim administratori paroli."};
   let depts=[];try{depts=await (await fetch("/api/depts")).json()}catch(e){}
-  if(!Array.isArray(depts)){$("#l_err").textContent=(depts&&depts.error)||"Serverga ulanib bo'lmadi";depts=[]}
+  if(!Array.isArray(depts)){$("#l_err").textContent=(depts&&depts.error)||"Serverga ulanib bo'lmadi. Internetni tekshirib, sahifani yangilang.";depts=[]}
   const groups={};depts.sort((a,b)=>(a.order||0)-(b.order||0)).forEach(d=>(groups[d.group||""]=groups[d.group||""]||[]).push(d));
-  $("#l_dept").innerHTML=Object.keys(groups).map(g=>{const o=groups[g].map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");return g?`<optgroup label="${esc(g)}">${o}</optgroup>`:o}).join("");
-  const sync=()=>{$("#l_deptw").style.display=$("#l_role").value==="mudir"?"":"none"};
-  $("#l_role").onchange=sync;sync();try{$("#l_name").value=localStorage.getItem("tabel-name")||""}catch(e){}
-  $("#loginForm").onsubmit=async e=>{e.preventDefault();$("#l_err").textContent="";
-    try{const r=await fetch("/api/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({role:$("#l_role").value,dept:$("#l_dept").value,password:$("#l_pass").value,name:$("#l_name").value})});
-      const j=await r.json();if(!r.ok)throw new Error(j.error||"Xatolik");
-      AUTH.save({token:j.token,role:j.role,dept:j.dept||"",who:j.who||""});try{localStorage.setItem("tabel-name",$("#l_name").value)}catch(e){}location.reload()}
-    catch(err){$("#l_err").textContent=err.message}};
+  $("#l_dept").innerHTML=`<option value="">— Bo'limni tanlang —</option>`+Object.keys(groups).map(g=>{const o=groups[g].map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");return g?`<optgroup label="${esc(g)}">${o}</optgroup>`:o}).join("");
+  const sync=()=>{const r=role(),m=r==="mudir";$("#l_deptw").style.display=m?"":"none";
+    document.querySelectorAll(".lnum").forEach((el,i)=>el.textContent=(m?i+3:i+2)+".");$("#l_passhint").textContent=HINT[r]};
+  document.querySelectorAll('input[name="l_role"]').forEach(x=>x.onchange=()=>{sync();$("#l_err").textContent=""});
+  try{const last=JSON.parse(localStorage.getItem("tabel-login")||"{}");
+    if(last.role){const el=document.querySelector(`input[name="l_role"][value="${last.role}"]`);if(el)el.checked=true}
+    if(last.dept&&depts.some(d=>d.id===last.dept))$("#l_dept").value=last.dept;
+    $("#l_name").value=last.name||localStorage.getItem("tabel-name")||""}catch(e){}
+  sync();
+  $("#l_eye").onclick=()=>{const p=$("#l_pass"),show=p.type==="password";p.type=show?"text":"password";$("#l_eye").textContent=show?"Yashirish":"Ko'rsatish"};
+  $("#loginForm").onsubmit=async e=>{e.preventDefault();const err=$("#l_err");err.textContent="";
+    const r=role(),dept=$("#l_dept").value,name=$("#l_name").value.trim(),pass=$("#l_pass").value;
+    if(r==="mudir"&&!dept){err.textContent="Bo'limingizni ro'yxatdan tanlang.";return $("#l_dept").focus()}
+    if(name.length<3){err.textContent="Ismingizni to'liq yozing (kamida 3 harf).";return $("#l_name").focus()}
+    if(!pass){err.textContent="Parolni kiriting.";return $("#l_pass").focus()}
+    const btn=$("#l_go");btn.disabled=true;btn.textContent="Tekshirilmoqda…";
+    try{const res=await fetch("/api/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({role:r,dept,password:pass,name})});
+      const j=await res.json().catch(()=>({}));
+      if(!res.ok){if(res.status===401)throw new Error(r==="mudir"?"Parol noto'g'ri. Bo'lim to'g'ri tanlanganini va parolni tekshiring.":"Parol noto'g'ri. Rol to'g'ri tanlanganini tekshiring.");throw new Error(j.error||"Kirib bo'lmadi. Keyinroq urinib ko'ring.")}
+      try{localStorage.setItem("tabel-login",JSON.stringify({role:r,dept,name}))}catch(x){}
+      AUTH.save({token:j.token,role:j.role,dept:j.dept||"",who:j.who||""});location.reload()}
+    catch(x){err.textContent=x.message;btn.disabled=false;btn.textContent="Kirish";$("#l_pass").select()}};
 }
 </script>
 <script>
