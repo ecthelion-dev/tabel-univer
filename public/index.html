@@ -395,6 +395,9 @@ function deptOptions(){
   const opt=d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`;
   return Object.keys(groups).map(g=>g?`<optgroup label="${esc(g)}">${groups[g].map(opt).join("")}</optgroup>`:groups[g].map(opt).join("")).join("");
 }
+let LAST_GROUP="";
+const deptGroups=()=>[...new Set(S.depts.map(d=>(d.group||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+document.addEventListener("change",e=>{if(e.target.id==="nd_group"){const w=$("#nd_gnew_w");if(w){w.hidden=e.target.value!=="__new";if(!w.hidden)$("#nd_gnew").focus()}}});
 const ROLE_LABEL={mudir:"Bo'lim mudiri",kadr:"Kadrlar bo'limi",admin:"Admin",buxg:"Buxgalter"};
 function badge(st){return `<span class="badge b-${st}">${ST_NAME[st]}</span>`}
 
@@ -464,14 +467,23 @@ function vSozlama(v){
    <label>Kunlik me'yor soati (1 stavka)<input type="number" id="s_nh" min="1" max="12" step="0.5" value="${esc(s.normHours||8)}"></label></div>
    <button class="btn pri" data-act="saveset">Saqlash</button></div>
    <div class="card wide"><div class="strip" style="margin-bottom:8px"><h3 style="margin:0">Bo'limlar</h3><span class="note">${S.depts.length} ta</span><div class="grow"></div><input type="text" id="d_q" placeholder="Bo'lim qidirish" style="min-width:200px"></div>
-   <div class="scroll" style="max-height:460px;overflow:auto"><table class="list dtab"><thead><tr><th>Bo'lim nomi</th><th>Fakultet / guruh</th><th>Mudir (imzo uchun)</th><th>Turi</th><th></th></tr></thead><tbody id="d_rows">${S.depts.map(d=>`<tr data-q="${esc((d.name+" "+(d.group||"")+" "+(d.head||"")).toLowerCase())}"><td><input type="text" data-dname="${esc(d.id)}" value="${esc(d.name)}" style="width:100%"></td><td><input type="text" data-dgroup="${esc(d.id)}" value="${esc(d.group||"")}" style="width:100%"></td><td><input type="text" data-dhead="${esc(d.id)}" value="${esc(d.head||"")}" style="width:100%"></td><td><select data-dkind="${esc(d.id)}"><option value="">—</option><option ${d.kind==="BUDJET"?"selected":""}>BUDJET</option><option ${d.kind==="KONTRAKT"?"selected":""}>KONTRAKT</option></select></td><td><button class="btn mini dng" data-ddel="${esc(d.id)}">O'chirish</button></td></tr>`).join("")}</tbody></table></div>
+   <div class="scroll" style="max-height:460px;overflow:auto"><table class="list dtab"><thead><tr><th>Bo'lim nomi</th><th>Fakultet / guruh</th><th>Mudir (imzo uchun)</th><th>Turi</th><th></th></tr></thead><datalist id="grpList">${deptGroups().map(g=>`<option value="${esc(g)}">`).join("")}</datalist><tbody id="d_rows">${S.depts.map(d=>`<tr data-q="${esc((d.name+" "+(d.group||"")+" "+(d.head||"")).toLowerCase())}"><td><input type="text" data-dname="${esc(d.id)}" value="${esc(d.name)}" style="width:100%"></td><td><input type="text" list="grpList" data-dgroup="${esc(d.id)}" value="${esc(d.group||"")}" placeholder="Tanlang yoki yozing" style="width:100%"></td><td><input type="text" data-dhead="${esc(d.id)}" value="${esc(d.head||"")}" style="width:100%"></td><td><select data-dkind="${esc(d.id)}"><option value="">—</option><option ${d.kind==="BUDJET"?"selected":""}>BUDJET</option><option ${d.kind==="KONTRAKT"?"selected":""}>KONTRAKT</option></select></td><td><button class="btn mini dng" data-ddel="${esc(d.id)}">O'chirish</button></td></tr>`).join("")}</tbody></table></div>
    <div class="row" style="margin-top:12px"><button class="btn" data-act="savedept">Bo'limlarni saqlash</button><button class="btn" data-act="newdept">+ Yangi bo'lim</button></div>
    <p class="note">Bo'lim nomi tabel sarlavhasiga, mudir ismi imzo qatoriga yoziladi. O'zgartirgach «Bo'limlarni saqlash» ni bosing.</p>
    <div class="sub2"><div>
-   <h3 style="margin:6px 0 6px;font-size:14px">Ro'yxatdan qo'shish</h3>
-   <p class="note" style="margin:0 0 6px">Har qatorga bitta bo'lim: <b>Fakultet; Kafedra nomi; Mudir F.I.Sh.</b> (Excel'dan nusxalab qo'ysangiz ham bo'ladi)</p>
-   <textarea id="d_bulk" placeholder="Fizika-matematika fakulteti; Matematika kafedrasi; Karimov A."></textarea>
-   <div class="row" style="margin-top:8px"><button class="btn" data-act="bulkdept">Qo'shish</button></div></div>
+   <h3 style="margin:6px 0 6px;font-size:14px">Yangi bo'lim qo'shish</h3>
+   <div class="frm" style="margin:8px 0 10px">
+    <label>Fakultet / guruh<select id="nd_group"><option value="">— Fakultetsiz —</option>${deptGroups().map(g=>`<option ${g===LAST_GROUP?"selected":""}>${esc(g)}</option>`).join("")}<option value="__new">+ Yangi fakultet…</option></select></label>
+    <label id="nd_gnew_w" hidden>Yangi fakultet nomi<input type="text" id="nd_gnew" placeholder="Masalan: Fizika-matematika fakulteti"></label>
+    <label class="full">Bo'lim / kafedra nomi<input type="text" id="nd_name" placeholder="Masalan: Matematika kafedrasi"></label>
+    <label>Mudir (F.I.Sh.)<input type="text" id="nd_head" placeholder="Masalan: Karimov A."></label>
+    <label>Turi<select id="nd_kind"><option value="">—</option><option>BUDJET</option><option>KONTRAKT</option></select></label>
+   </div>
+   <button class="btn pri" data-act="adddept">Qo'shish</button>
+   <details style="margin-top:14px"><summary class="note" style="cursor:pointer">Ko'p bo'limni birdan qo'shish (Excel'dan nusxalab)</summary>
+    <p class="note" style="margin:8px 0 6px">Har qatorga bitta bo'lim: <b>Fakultet; Kafedra nomi; Mudir F.I.Sh.</b></p>
+    <textarea id="d_bulk" placeholder="Fizika-matematika fakulteti; Matematika kafedrasi; Karimov A."></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" data-act="bulkdept">Ro'yxatni qo'shish</button></div></details></div>
    ${STANDALONE?`<div><h3 style="margin:6px 0 6px;font-size:14px">Bo'lim mudirlari parollari</h3><p class="note" style="margin:0 0 6px">Parolsiz bo'limlar uchun tasodifiy parol yaratiladi. Parollar faqat shu paytda ko'rinadi, nusxalab oling.</p>
    <div class="row"><button class="btn" data-act="genpass">Parollarni yaratish</button><label class="note"><input type="checkbox" id="g_all"> hammasini qayta yaratish</label></div></div>`:""}</div></div>
    ${STANDALONE?`<div class="card"><h3 style="margin-top:0">Zaxira nusxa</h3>
@@ -661,6 +673,12 @@ document.addEventListener("click",async ev=>{
     try{for(const d of S.depts){const n=document.querySelector(`[data-dname="${d.id}"]`),k=document.querySelector(`[data-dkind="${d.id}"]`);
       const g=document.querySelector(`[data-dgroup="${d.id}"]`),h=document.querySelector(`[data-dhead="${d.id}"]`);
       if(n.value.trim()!==d.name||k.value!==(d.kind||"")||g.value.trim()!==(d.group||"")||h.value.trim()!==(d.head||""))await db.collection("departments").doc(d.id).update({name:n.value.trim()||d.name,kind:k.value,group:g.value.trim(),head:h.value.trim()})}toast("Saqlandi")}catch(e){toast("Xatolik: "+(e.message||e.code))}}
+  else if(a==="adddept"){
+    const name=$("#nd_name").value.trim().replace(/\s+/g," ");if(!name){toast("Bo'lim nomini yozing");return $("#nd_name").focus()}
+    let g=$("#nd_group").value;if(g==="__new"){g=$("#nd_gnew").value.trim();if(!g){toast("Yangi fakultet nomini yozing");return $("#nd_gnew").focus()}}
+    if(S.depts.some(d=>d.name.toLowerCase()===name.toLowerCase()&&(d.group||"")===g))return toast("Bunday bo'lim allaqachon bor");
+    try{LAST_GROUP=g;await db.collection("departments").add({name,group:g,head:$("#nd_head").value.trim(),kind:$("#nd_kind").value,order:S.depts.length+1});toast(name+" qo'shildi")}
+    catch(er){toast("Xatolik: "+(er.message||er.code))}}
   else if(a==="bulkdept"){
     const lines=$("#d_bulk").value.split(/\n/).map(x=>x.trim()).filter(Boolean);if(!lines.length)return toast("Ro'yxat bo'sh");
     try{let o=S.depts.length;for(const ln of lines){const p=ln.split(/\t|;/).map(x=>x.trim());
