@@ -51,7 +51,7 @@ O'zgaruvchilarni kiritgach saytni qayta deploy qiling.
 - **Login himoyasi:** bir manzildan 8 marta noto'g'ri paroldan keyin 15 daqiqa bloklanadi. Kirishda ism so'raladi (jurnal uchun).
 
 ## Huquqlar (serverda tekshiriladi)
-- **Bo'lim mudiri:** faqat o'z bo'limi. Istisno kiritadi, tabelni tasdiqqa yuboradi. Yuborilgach kadrlar qaytarmaguncha o'zgartira olmaydi.
+- **Bo'lim mudiri:** faqat o'z bo'limi. O'z bo'limiga xodim (o'qituvchi) qo'shadi, tahrirlaydi, o'chiradi, lekin boshqa bo'limga o'tkaza olmaydi. Istisno kiritadi, tabelni tasdiqqa yuboradi. Yuborilgach kadrlar qaytarmaguncha kunlarni o'zgartira olmaydi. Hamma o'zgarish jurnalga yoziladi.
 - **Kadrlar bo'limi:** xodimlar, istisnolar, tasdiqlash va qaytarish.
 - **Buxgalter:** faqat ko'radi va yuklab oladi.
 - **Admin:** hamma narsa, shu jumladan bo'limlar, sozlamalar va parollar.

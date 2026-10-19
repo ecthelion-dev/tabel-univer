@@ -197,7 +197,7 @@ async function showLogin(){
 const MONTHS=["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentyabr","Oktabr","Noyabr","Dekabr"];
 const CODES=[["В","Dam olish / bayram"],["Б","Kasallik (mehnatga layoqatsizlik)"],["МТ","Mehnat ta'tili"],["X/C","Xizmat safari (namunadagi belgi)"],["ОУ","O'quv ta'tili"],["П","Progul (sababsiz)"],["А","Ma'muriyat ruxsati bilan ishga kelmagan"],["О","Navbatdagi ta'til"],["Р","Tug'ish bilan bog'liq ta'til"],["Г","Davlat majburiyati"],["Н","Tungi ish vaqti"],["С","Navbatdan tashqari ish"],["ВУ","O'qish bo'yicha dam olish"],["РП","Bayramda ishlangan kun"],["Ф","Haqiqatda ishlangan kun"]];
 const CLS={"В":"off","Б":"sick","МТ":"leave","О":"leave","ОУ":"leave","Р":"leave","X/C":"trip","Г":"trip"};
-const ROLE_TABS={mudir:["tabel"],kadr:["holat","tabel","xodim","jurnal"],buxg:["holat","tabel"],admin:["holat","tabel","xodim","sozlama","jurnal"]};
+const ROLE_TABS={mudir:["tabel","xodim"],kadr:["holat","tabel","xodim","jurnal"],buxg:["holat","tabel"],admin:["holat","tabel","xodim","sozlama","jurnal"]};
 const TAB_NAME={holat:"Holat",tabel:"Tabel",xodim:"Xodimlar",sozlama:"Sozlamalar",jurnal:"Jurnal"};
 const ST_NAME={draft:"Qoralama",submitted:"Tekshiruvda",approved:"Tasdiqlangan",returned:"Qaytarilgan"};
 const DEF_SET={institute:"Muassasa nomi",rector:"",prorector:"",hr:"",normHours:8,workdays:[],shortDays:[],
@@ -485,7 +485,7 @@ function openEmp(id,deptId){
   openPanel(`<h3>${id?"Xodimni tahrirlash":"Yangi xodim"}</h3><div class="frm">
    <label class="full">F.I.Sh.<input type="text" id="e_name" value="${esc(e.name)}"></label>
    <label class="full">Lavozim<input type="text" id="e_pos" value="${esc(e.position)}"></label>
-   <label>Bo'lim<select id="e_dept">${S.depts.map(d=>`<option value="${esc(d.id)}" ${d.id===e.deptId?"selected":""}>${esc(d.name)}</option>`).join("")}</select></label>
+   <label>Bo'lim<select id="e_dept" ${U.role==="mudir"?"disabled":""}>${S.depts.map(d=>`<option value="${esc(d.id)}" ${d.id===e.deptId?"selected":""}>${esc(d.name)}</option>`).join("")}</select></label>
    <label>Shtat birligi (stavka)<input type="number" id="e_rate" step="0.25" min="0" value="${e.rate}"></label>
    <label>Kunlik soat (Du–Ju)<input type="number" id="e_h" step="0.5" min="0" value="${e.h}"></label>
    <label>Shanba soati (0 = dam olish)<input type="number" id="e_sat" step="0.5" min="0" value="${e.sat||0}"></label></div>

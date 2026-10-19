@@ -115,6 +115,14 @@ function allowed(a, op, c, id, data, m) {
   if (a.role === "buxg") return false;
   if (a.role === "kadr") return ["employees", "exceptions", "tabels"].includes(c);
   if (a.role === "mudir") {
+    if (c === "employees") {
+      // Mudir faqat o'z bo'limi xodimlarini qo'shadi, tahrirlaydi, o'chiradi; boshqa bo'limga o'tkaza olmaydi
+      const old = m.employees[id];
+      if (old && old.deptId !== a.dept) return false;
+      if (op === "delete") return !!old;
+      const next = { ...(old || {}), ...(data || {}) };
+      return next.deptId === a.dept;
+    }
     if (c === "exceptions") {
       const old = m.exceptions[id];
       const x = op === "delete" ? old : { ...(old || {}), ...(data || {}) };
