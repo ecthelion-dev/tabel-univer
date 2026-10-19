@@ -445,7 +445,7 @@ function vTabel(v){
 
 function vXodim(v){
   const blocks=[curDept()].filter(Boolean).map(d=>{const es=deptEmps(d.id);
-    const r=es.map((e,i)=>`<tr><td class="num">${i+1}</td><td>${esc(e.name)}</td><td>${esc(e.position)}</td><td class="num">${fmt(e.rate||1)}</td><td class="num">${fmt(e.h)} / ${fmt(e.sat||0)}</td><td class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn mini" data-mv="${esc(e.id)}" data-dir="-1" ${i?"":"disabled"} aria-label="Yuqoriga">↑</button><button class="btn mini" data-mv="${esc(e.id)}" data-dir="1" ${i<es.length-1?"":"disabled"} aria-label="Pastga">↓</button><button class="btn mini" data-emp-edit="${esc(e.id)}">Tahrirlash</button></td></tr>`).join("")||`<tr><td colspan="6" class="note">Xodim yo'q</td></tr>`;
+    const r=es.map((e,i)=>`<tr><td class="num">${i+1}</td><td>${esc(e.name)}</td><td>${esc(e.position)}</td><td class="num">${fmt(e.rate||1)}</td><td class="num">${fmt(e.h)} / ${fmt(e.sat||0)}</td><td><div class="row" style="gap:4px;flex-wrap:nowrap;justify-content:flex-end"><button class="btn mini" data-mv="${esc(e.id)}" data-dir="-1" ${i?"":"disabled"} aria-label="Yuqoriga">↑</button><button class="btn mini" data-mv="${esc(e.id)}" data-dir="1" ${i<es.length-1?"":"disabled"} aria-label="Pastga">↓</button><button class="btn mini" data-emp-edit="${esc(e.id)}">Tahrirlash</button><button class="btn mini dng" data-edel="${esc(e.id)}" title="Xodimni o'chirish">O'chirish</button></div></td></tr>`).join("")||`<tr><td colspan="6" class="note">Xodim yo'q</td></tr>`;
     return `<div class="card scroll" style="margin-bottom:14px"><div class="strip" style="margin-bottom:6px"><h2 style="font-size:15px">${esc(d.name)}</h2><span class="note">${es.length} xodim</span><div class="grow"></div><button class="btn" data-emp-bulk="${esc(d.id)}">Excel'dan qo'yish</button><button class="btn" data-emp-new="${esc(d.id)}">+ Xodim qo'shish</button></div>
      <table class="list"><thead><tr><th>№</th><th>F.I.Sh.</th><th>Lavozim</th><th>Stavka</th><th>Soat Du–Ju / Shanba</th><th></th></tr></thead><tbody>${r}</tbody></table></div>`}).join("");
   v.innerHTML=blocks;
@@ -638,6 +638,9 @@ document.addEventListener("click",async ev=>{
   if(t.dataset.mv){const e=S.emps.find(x=>x.id===t.dataset.mv);if(!e)return;const es=deptEmps(e.deptId),i=es.indexOf(e),j=i+(+t.dataset.dir);if(j<0||j>=es.length)return;
     [es[i],es[j]]=[es[j],es[i]];const ops=es.map((x,k)=>({x,k})).filter(({x,k})=>x.no!==k+1).map(({x,k})=>({op:"update",col:"employees",id:x.id,data:{no:k+1}}));
     try{if(db.batch)await db.batch(ops);else for(const o of ops)await db.collection("employees").doc(o.id).update(o.data)}catch(er){toast("Xatolik: "+(er.message||er.code))}return}
+  if(t.dataset.edel){const e=S.emps.find(x=>x.id===t.dataset.edel);if(!e)return;
+    if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Rostdanmi?";t.title=e.name+" o'chirilsinmi? Yana bir marta bosing.";setTimeout(()=>{if(t.isConnected){t.dataset.sure="";t.textContent="O'chirish"}},4000);return}
+    try{await db.collection("employees").doc(e.id).delete();toast(e.name+" o'chirildi")}catch(er){toast("Xatolik: "+(er.message||er.code))}return}
   if(t.dataset.ddel){if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Rostdanmi?";return}
     try{await db.collection("departments").doc(t.dataset.ddel).delete();toast("Bo'lim o'chirildi")}catch(er){toast(er.message||"Xatolik")}return}
   if(t.dataset.delx){try{await db.collection("exceptions").doc(t.dataset.delx).delete()}catch(e){toast("Xatolik: "+(e.message||e.code))}return}
