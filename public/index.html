@@ -152,7 +152,7 @@ function makeDb(){
   const docRef=(c,id)=>({id,get:async()=>snapDoc(c,id),set:d=>write([{op:"set",col:c,id,data:d}]),update:d=>write([{op:"update",col:c,id,data:d}]),delete:()=>write([{op:"delete",col:c,id}]),onSnapshot:cb=>sub(()=>cb(snapDoc(c,id)))});
   const colRef=c=>({doc:id=>docRef(c,id||uid()),add:async d=>{const id=uid();await write([{op:"set",col:c,id,data:d}]);return docRef(c,id)},onSnapshot:cb=>sub(()=>cb(snapCol(c)))});
   return{doc:p=>{const[c,id]=p.split("/");return docRef(c,id)},collection:colRef,
-    async start(){const tick=async()=>{try{data=await call("data");emit()}catch(e){if(e.code!=="auth")console.warn(e)}};await tick();setInterval(()=>{if(!document.hidden)tick()},6000)},
+    async start(){const tick=async()=>{try{data=await call("data");emit()}catch(e){if(e.code!=="auth")console.warn(e)}};await tick();let last=Date.now();setInterval(()=>{if(!document.hidden&&Date.now()-last>=60000){last=Date.now();tick()}},5000);document.addEventListener("visibilitychange",()=>{if(!document.hidden&&Date.now()-last>15000){last=Date.now();tick()}})},
     genpass:all=>call("genpass",{all:!!all})}
 }
 async function getDl(){

@@ -52,4 +52,4 @@ O'zgaruvchilarni kiritgach saytni qayta deploy qiling.
 - Ma'lumot Netlify Blobs'da JSON ko'rinishida saqlanadi. Yuzlab xodim va bir necha o'n bo'lim uchun yetarli. Juda katta hajm yoki bir vaqtda ko'p yozuv bo'lsa, MySQL/Postgres'ga o'tish kerak.
 - Ikki kishi bir lahzada bir xil turdagi yozuvni saqlasa, oxirgisi yutadi (kamdan-kam holat).
 - Login urinishlari soni cheklanmagan. Parollarni uzun qo'ying.
-- Ilova sahifasi har 6 soniyada yangilanadi (real vaqtga yaqin).
+- Sahifa har 60 soniyada va oynaga qaytilganda yangilanadi; o'z o'zgarishlaringiz darhol ko'rinadi. Bu Netlify bepul limitini tejaydi.
