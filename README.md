@@ -40,6 +40,7 @@ O'zgaruvchilarni kiritgach saytni qayta deploy qiling.
 4. Sozlamalarda "Parollarni yaratish" tugmasini bosing va har bo'lim mudiriga o'z parolini bering.
 
 ## Imkoniyatlar
+- **Avans va oylik:** har oy ikki tabel. Avans tabeli 1–15 kunlar uchun (muddat 15-sana), oylik tabeli to'liq oy uchun. Ikkalasi alohida topshiriladi, tasdiqlanadi, chop etiladi va Excel'ga chiqariladi. Avans tabeli tekshiruvda turganda mudir 1–15 kunlarni o'zgartira olmaydi.
 - **Muzlatish:** tasdiqlangan tabel o'sha paytdagi holatida saqlanadi. Keyin stavka, xodim yoki sozlama o'zgarsa ham tasdiqlangan oy o'zgarmaydi. "Qayta ochish" muzlatishni bekor qiladi.
 - **Kalendar (Sozlamalar):** bayramlar, ish kuniga aylantirilgan dam olish kunlari, bayram oldi qisqartirilgan kunlar (−1 soat), kunlik me'yor soati.
 - **Excel:** har bir tabel yoki tasdiqlanganlarning hammasi bitta faylda (har bo'lim alohida varaqda).

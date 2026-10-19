@@ -122,7 +122,11 @@ function allowed(a, op, c, id, data, m) {
       const emp = m.employees[x.empId];
       if (!emp || emp.deptId !== a.dept) return false;
       if (old && m.employees[old.empId]?.deptId !== a.dept) return false;
-      return editable(m.tabels[`${a.dept}_${String(x.from).slice(0, 7)}`]);
+      const ym = String(x.from).slice(0, 7);
+      // Avans tabeli tekshiruvda bo'lsa, 1–15 kunlarni o'zgartirib bo'lmaydi
+      const touchesAvans = +String(x.from).slice(8, 10) <= 15 || (old && +String(old.from).slice(8, 10) <= 15);
+      if (touchesAvans && m.tabels[`${a.dept}_${ym}_avans`]?.status === "submitted") return false;
+      return editable(m.tabels[`${a.dept}_${ym}`]);
     }
     if (c === "tabels") {
       if (!id.startsWith(a.dept + "_") || op === "delete") return false;
