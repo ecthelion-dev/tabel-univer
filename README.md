@@ -39,6 +39,16 @@ O'zgaruvchilarni kiritgach saytni qayta deploy qiling.
 3. Bo'limlar va xodimlarni qo'shing (ro'yxatdan qo'yish mumkin).
 4. Sozlamalarda "Parollarni yaratish" tugmasini bosing va har bo'lim mudiriga o'z parolini bering.
 
+## Imkoniyatlar
+- **Muzlatish:** tasdiqlangan tabel o'sha paytdagi holatida saqlanadi. Keyin stavka, xodim yoki sozlama o'zgarsa ham tasdiqlangan oy o'zgarmaydi. "Qayta ochish" muzlatishni bekor qiladi.
+- **Kalendar (Sozlamalar):** bayramlar, ish kuniga aylantirilgan dam olish kunlari, bayram oldi qisqartirilgan kunlar (−1 soat), kunlik me'yor soati.
+- **Excel:** har bir tabel yoki tasdiqlanganlarning hammasi bitta faylda (har bo'lim alohida varaqda).
+- **Jurnal:** kim (ismi bilan), qachon, nimani o'zgartirgani. Admin va kadrlar bo'limi ko'radi.
+- **Zaxira:** Sozlamalar → "Zaxirani yuklab olish" (JSON). Har oy oxirida yuklab, saqlab qo'ying. "Tiklash" hamma ma'lumotni fayldagisi bilan almashtiradi.
+- **Eslatma:** oy tugashiga 5 kun qolganda va oy o'tib ketganda topshirilmagan tabellar haqida ogohlantiradi.
+- **Bir vaqtda saqlash:** ikki kishi bir lahzada saqlasa, server qayta urinadi va hech biri yo'qolmaydi.
+- **Login himoyasi:** bir manzildan 8 marta noto'g'ri paroldan keyin 15 daqiqa bloklanadi. Kirishda ism so'raladi (jurnal uchun).
+
 ## Huquqlar (serverda tekshiriladi)
 - **Bo'lim mudiri:** faqat o'z bo'limi. Istisno kiritadi, tabelni tasdiqqa yuboradi. Yuborilgach kadrlar qaytarmaguncha o'zgartira olmaydi.
 - **Kadrlar bo'limi:** xodimlar, istisnolar, tasdiqlash va qaytarish.
@@ -50,6 +60,6 @@ O'zgaruvchilarni kiritgach saytni qayta deploy qiling.
 
 ## Cheklovlar
 - Ma'lumot Netlify Blobs'da JSON ko'rinishida saqlanadi. Yuzlab xodim va bir necha o'n bo'lim uchun yetarli. Juda katta hajm yoki bir vaqtda ko'p yozuv bo'lsa, MySQL/Postgres'ga o'tish kerak.
-- Ikki kishi bir lahzada bir xil turdagi yozuvni saqlasa, oxirgisi yutadi (kamdan-kam holat).
-- Login urinishlari soni cheklanmagan. Parollarni uzun qo'ying.
+- Parollar (`ADMIN_PASS` va boshqalar) kamida 12 belgili bo'lsin va kod ichidagi so'zlarga (`admin`, `kadr`) teng bo'lmasin, aks holda Netlify xavfsizlik tekshiruvi deployni to'xtatadi.
+- Kadrlar bo'limi va buxgalter umumiy parol bilan kiradi; kim ekanligi kirishda yozilgan ismdan olinadi.
 - Sahifa har 60 soniyada va oynaga qaytilganda yangilanadi; o'z o'zgarishlaringiz darhol ko'rinadi. Bu Netlify bepul limitini tejaydi.

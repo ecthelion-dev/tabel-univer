@@ -92,6 +92,11 @@ table.tab th.fix,table.tab td.fix{position:sticky;left:0;background:var(--paper)
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(18px,env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;z-index:30;display:none}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:14px}
+.remind{background:var(--st-sub-bg);color:var(--st-sub);border-radius:6px;padding:9px 12px;margin:0 0 12px;font-size:13px}
+.frozen{background:var(--st-ok-bg);color:var(--st-ok);border-radius:6px;padding:7px 12px;margin:0 0 10px;font-size:13px}
+#whoami{font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini{padding:3px 8px;font-size:12px}
+@media (max-width:700px){header.top{position:static}.month b{min-width:96px}.strip h2{font-size:16px}}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .16s ease-out}@keyframes up{from{transform:translateY(12px);opacity:.4}}}
 </style>
 
@@ -107,7 +112,7 @@ table.tab th.fix,table.tab td.fix{position:sticky;left:0;background:var(--paper)
       </select></div>
     <div class="ctl" id="deptCtl"><label for="dept">Bo'lim</label><select id="dept"></select></div>
     <div class="month"><button class="btn" id="prev" aria-label="Oldingi oy">‹</button><b id="mlabel" title="Joriy oyga qaytish" style="cursor:pointer"></b><button class="btn" id="next" aria-label="Keyingi oy">›</button></div>
-  <button class="btn" id="logout" hidden>Chiqish</button>
+  <span id="whoami" hidden></span><button class="btn" id="logout" hidden>Chiqish</button>
   </header>
   <div class="proto">Prototip: rol shu yerdan tanlanadi. Haqiqiy tizimda har kim login bilan kiradi va faqat o'z huquqini oladi.</div>
   <nav class="tabs" id="tabs"></nav>
@@ -120,6 +125,7 @@ table.tab th.fix,table.tab td.fix{position:sticky;left:0;background:var(--paper)
     <div class="frm" style="grid-template-columns:1fr">
       <label>Rol<select id="l_role"><option value="mudir">Bo'lim mudiri</option><option value="kadr">Kadrlar bo'limi</option><option value="buxg">Buxgalter</option><option value="admin">Admin</option></select></label>
       <label id="l_deptw">Bo'lim<select id="l_dept"></select></label>
+      <label>Ismingiz (F.I.Sh.)<input type="text" id="l_name" autocomplete="name" placeholder="Masalan: Karimov A."></label>
       <label>Parol<input type="password" id="l_pass" autocomplete="current-password"></label>
     </div>
     <div id="l_err" style="color:var(--st-ret);min-height:20px;font-size:13px"></div>
@@ -153,7 +159,11 @@ function makeDb(){
   const colRef=c=>({doc:id=>docRef(c,id||uid()),add:async d=>{const id=uid();await write([{op:"set",col:c,id,data:d}]);return docRef(c,id)},onSnapshot:cb=>sub(()=>cb(snapCol(c)))});
   return{doc:p=>{const[c,id]=p.split("/");return docRef(c,id)},collection:colRef,
     async start(){const tick=async()=>{try{data=await call("data");emit()}catch(e){if(e.code!=="auth")console.warn(e)}};await tick();let last=Date.now();setInterval(()=>{if(!document.hidden&&Date.now()-last>=60000){last=Date.now();tick()}},5000);document.addEventListener("visibilitychange",()=>{if(!document.hidden&&Date.now()-last>15000){last=Date.now();tick()}})},
-    genpass:all=>call("genpass",{all:!!all})}
+    genpass:all=>call("genpass",{all:!!all}),
+    batch:ops=>write(ops),
+    audit:ym=>call("audit?ym="+encodeURIComponent(ym)),
+    backup:()=>call("backup"),
+    async restore(obj){data=await call("restore",obj);emit()}}
 }
 async function getDl(){
   if(window.claude)return claude.use("downloads").catch(()=>null);
@@ -171,11 +181,11 @@ async function showLogin(){
   const groups={};depts.sort((a,b)=>(a.order||0)-(b.order||0)).forEach(d=>(groups[d.group||""]=groups[d.group||""]||[]).push(d));
   $("#l_dept").innerHTML=Object.keys(groups).map(g=>{const o=groups[g].map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");return g?`<optgroup label="${esc(g)}">${o}</optgroup>`:o}).join("");
   const sync=()=>{$("#l_deptw").style.display=$("#l_role").value==="mudir"?"":"none"};
-  $("#l_role").onchange=sync;sync();
+  $("#l_role").onchange=sync;sync();try{$("#l_name").value=localStorage.getItem("tabel-name")||""}catch(e){}
   $("#loginForm").onsubmit=async e=>{e.preventDefault();$("#l_err").textContent="";
-    try{const r=await fetch("/api/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({role:$("#l_role").value,dept:$("#l_dept").value,password:$("#l_pass").value})});
+    try{const r=await fetch("/api/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({role:$("#l_role").value,dept:$("#l_dept").value,password:$("#l_pass").value,name:$("#l_name").value})});
       const j=await r.json();if(!r.ok)throw new Error(j.error||"Xatolik");
-      AUTH.save({token:j.token,role:j.role,dept:j.dept||""});location.reload()}
+      AUTH.save({token:j.token,role:j.role,dept:j.dept||"",who:j.who||""});try{localStorage.setItem("tabel-name",$("#l_name").value)}catch(e){}location.reload()}
     catch(err){$("#l_err").textContent=err.message}};
 }
 </script>
@@ -183,10 +193,10 @@ async function showLogin(){
 const MONTHS=["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentyabr","Oktabr","Noyabr","Dekabr"];
 const CODES=[["В","Dam olish / bayram"],["Б","Kasallik (mehnatga layoqatsizlik)"],["МТ","Mehnat ta'tili"],["X/C","Xizmat safari (namunadagi belgi)"],["ОУ","O'quv ta'tili"],["П","Progul (sababsiz)"],["А","Ma'muriyat ruxsati bilan ishga kelmagan"],["О","Navbatdagi ta'til"],["Р","Tug'ish bilan bog'liq ta'til"],["Г","Davlat majburiyati"],["Н","Tungi ish vaqti"],["С","Navbatdan tashqari ish"],["ВУ","O'qish bo'yicha dam olish"],["РП","Bayramda ishlangan kun"],["Ф","Haqiqatda ishlangan kun"]];
 const CLS={"В":"off","Б":"sick","МТ":"leave","О":"leave","ОУ":"leave","Р":"leave","X/C":"trip","Г":"trip"};
-const ROLE_TABS={mudir:["tabel"],kadr:["holat","tabel","xodim"],buxg:["holat","tabel"],admin:["holat","tabel","xodim","sozlama"]};
-const TAB_NAME={holat:"Holat",tabel:"Tabel",xodim:"Xodimlar",sozlama:"Sozlamalar"};
+const ROLE_TABS={mudir:["tabel"],kadr:["holat","tabel","xodim","jurnal"],buxg:["holat","tabel"],admin:["holat","tabel","xodim","sozlama","jurnal"]};
+const TAB_NAME={holat:"Holat",tabel:"Tabel",xodim:"Xodimlar",sozlama:"Sozlamalar",jurnal:"Jurnal"};
 const ST_NAME={draft:"Qoralama",submitted:"Tekshiruvda",approved:"Tasdiqlangan",returned:"Qaytarilgan"};
-const DEF_SET={institute:"Termiz davlat pedagogika instituti",rector:"A.Xasanov",prorector:"L.Bozorov",hr:"Sh.Berdiyev",
+const DEF_SET={institute:"Muassasa nomi",rector:"",prorector:"",hr:"",normHours:8,workdays:[],shortDays:[],
   holidays:["2026-01-01","2026-03-08","2026-03-21","2026-05-09","2026-09-01","2026-10-01","2026-12-08"]};
 const S={emps:[],depts:[],excs:[],tabels:{},settings:null,ready:{}};
 const U={role:"kadr",dept:"",tab:"tabel",ym:"2026-10"};
@@ -204,7 +214,11 @@ const dim=()=>{const[y,m]=ymParts();return new Date(y,m,0).getDate()};
 const isoOf=d=>`${U.ym}-${p2(d)}`;
 const dowOf=d=>{const[y,m]=ymParts();return new Date(y,m-1,d).getDay()};
 const holSet=()=>new Set(set().holidays||[]);
-const isOff=d=>dowOf(d)===0||holSet().has(isoOf(d));
+const wdSet=()=>new Set(set().workdays||[]);
+const shSet=()=>new Set(set().shortDays||[]);
+const normH=()=>+set().normHours||8;
+const isWorkday=d=>{const iso=isoOf(d);if(holSet().has(iso))return false;if(wdSet().has(iso))return true;const w=dowOf(d);return w>0&&w<6};
+const isOff=d=>{const iso=isoOf(d);if(holSet().has(iso))return true;if(wdSet().has(iso))return false;const w=dowOf(d);return w===0||w===6};
 const fmt=n=>Number.isInteger(n)?String(n):n.toFixed(1);
 
 /* ---------- calculation (same rules as the Excel template) ---------- */
@@ -212,17 +226,20 @@ function dayVal(emp,d,excs){
   const iso=isoOf(d);let hit=null;
   for(const x of excs){if(x.from<=iso&&iso<=(x.to||x.from))hit=x}
   if(hit)return{v:hit.val,ex:true};
-  const dw=dowOf(d);
-  if(dw===0||holSet().has(iso))return{v:"В"};
-  if(dw===6)return{v:emp.sat>0?emp.sat:"В"};
-  return{v:emp.h};
+  if(holSet().has(iso))return{v:"В"};
+  const dw=dowOf(d);let v;
+  if(wdSet().has(iso))v=emp.h;
+  else if(dw===0)return{v:"В"};
+  else if(dw===6){if(!(emp.sat>0))return{v:"В"};v=emp.sat}
+  else v=emp.h;
+  if(shSet().has(iso)&&v>0)v=Math.max(0,v-1);
+  return{v};
 }
 function calcEmp(emp){
   const excs=S.excs.filter(x=>x.empId===emp.id&&x.from.startsWith(U.ym)).sort((a,b)=>(a.ts||0)-(b.ts||0));
   const vals=[];let kun=0,soat=0;
   for(let d=1;d<=dim();d++){const r=dayVal(emp,d,excs);vals.push(r);if(typeof r.v==="number"){if(r.v>0)kun++;soat+=r.v}}
-  let work=0;for(let d=1;d<=dim();d++){const w=dowOf(d);if(w>0&&w<6&&!holSet().has(isoOf(d)))work++}
-  const norm=work*8*(emp.rate||1);
+  let norm=0;for(let d=1;d<=dim();d++){if(isWorkday(d))norm+=(normH()-(shSet().has(isoOf(d))?1:0))*(emp.rate||1)}
   return{vals,kun,soat,norm,farq:soat-norm,excs};
 }
 const deptEmps=id=>S.emps.filter(e=>e.deptId===id).sort((a,b)=>(a.no||0)-(b.no||0)||a.name.localeCompare(b.name));
@@ -239,34 +256,72 @@ function canEditDays(dept){
 }
 
 /* ---------- tabel markup (used on screen and in the downloaded file) ---------- */
-function tabelMarkup(dept,editable){
-  const emps=deptEmps(dept.id),n=dim(),[y,m]=ymParts(),s=set();
-  const dh=[];for(let d=1;d<=n;d++)dh.push(`<th class="dh ${isOff(d)?"wk":""}">${d}</th>`);
+function tabelData(dept,live){
+  const t=stOf(dept.id);
+  if(!live&&t.status==="approved"&&t.snap&&t.snap.ym===U.ym)return{...t.snap,frozen:true};
+  const s=set(),n=dim(),days=[];
+  for(let d=1;d<=n;d++)days.push({d,off:isOff(d)});
+  const rows=deptEmps(dept.id).map(e=>{const c=calcEmp(e);
+    return{id:e.id,name:e.name,position:e.position||"",rate:e.rate||1,vals:c.vals.map(r=>r.ex?{v:r.v,ex:1}:{v:r.v}),kun:c.kun,soat:c.soat,norm:c.norm,farq:c.farq}});
+  return{ym:U.ym,days,rows,dept:{name:dept.name,kind:dept.kind||"",head:dept.head||"",title:dept.title||""},
+    set:{institute:s.institute||"",rector:s.rector||"",prorector:s.prorector||"",hr:s.hr||""}};
+}
+function tabelMarkup(T,editable){
+  const[y,m]=T.ym.split("-").map(Number),n=T.days.length,s=T.set,dept=T.dept;
+  const dh=T.days.map(x=>`<th class="dh ${x.off?"wk":""}">${x.d}</th>`).join("");
   let rows="";
-  emps.forEach((e,i)=>{
-    const c=calcEmp(e);
-    const cells=c.vals.map((r,k)=>{
-      const d=k+1,txt=typeof r.v==="number"?fmt(r.v):esc(r.v);
-      const cl=typeof r.v==="string"?(CLS[r.v]||"other"):(isOff(d)?"wk":"");
-      return `<td class="d ${cl} ${r.ex?"ex":""}" data-emp="${esc(e.id)}" data-d="${d}">${txt}</td>`}).join("");
-    rows+=`<tr><td>${i+1}</td><td class="l fix nm" data-emp="${esc(e.id)}">${esc(e.name)}</td><td class="l">${esc(e.position)}</td><td>${fmt(e.rate||1)}</td>${cells}
-      <td class="sum">${c.kun}</td><td class="sum">${fmt(c.soat)}</td><td class="sum">${fmt(c.norm)}</td><td class="sum">${c.farq>0?"+":""}${fmt(c.farq)}</td></tr>`;
+  T.rows.forEach((e,i)=>{
+    const cells=e.vals.map((r,k)=>{
+      const day=T.days[k],txt=typeof r.v==="number"?fmt(r.v):esc(r.v);
+      const cl=typeof r.v==="string"?(CLS[r.v]||"other"):(day.off?"wk":"");
+      return `<td class="d ${cl} ${r.ex?"ex":""}" data-emp="${esc(e.id)}" data-d="${day.d}">${txt}</td>`}).join("");
+    rows+=`<tr><td>${i+1}</td><td class="l fix nm" data-emp="${esc(e.id)}">${esc(e.name)}</td><td class="l">${esc(e.position)}</td><td>${fmt(e.rate)}</td>${cells}
+      <td class="sum">${e.kun}</td><td class="sum">${fmt(e.soat)}</td><td class="sum">${fmt(e.norm)}</td><td class="sum">${e.farq>0?"+":""}${fmt(e.farq)}</td></tr>`;
   });
-  if(!emps.length)rows=`<tr><td colspan="${n+8}" style="padding:20px">Bu bo'limda xodim yo'q. «Xodimlar» bo'limidan qo'shing.</td></tr>`;
+  if(!T.rows.length)rows=`<tr><td colspan="${n+8}" style="padding:20px">Bu bo'limda xodim yo'q. «Xodimlar» bo'limidan qo'shing.</td></tr>`;
   return `<div class="p-top"><div>"TASDIQLAYMAN"<br>${esc(s.institute)} rektori<br>____________________ ${esc(s.rector)}<br>${MONTHS[m-1]} ${y}-y.</div></div>
   <div class="p-title">${esc(s.institute)} ${esc(dept.name)} ishchi-xodimlariga ${y}-yil ${MONTHS[m-1].toLowerCase()} oyi uchun\nTABEL${dept.kind?" — "+esc(dept.kind):""}</div>
   <div class="sheetwrap"><table class="tab ${editable?"edit":""}"><thead>
    <tr><th rowspan="2">№</th><th rowspan="2" class="fix">Familiyasi, ismi, sharifi</th><th rowspan="2">Lavozimi</th><th rowspan="2">Shtat birligi</th><th colspan="${n}">Oy kunlari</th><th rowspan="2">Ishlangan kun</th><th rowspan="2">Ishlangan soat</th><th rowspan="2">Me'yor soat</th><th rowspan="2">Farq</th></tr>
-   <tr>${dh.join("")}</tr></thead><tbody>${rows}</tbody></table></div>
-  <div class="sign"><div>${esc(dept.title||"Bo'lim (kafedra) mudiri")}: <i></i> ${esc(dept.head||"")}</div><div>O'quv ishlari bo'yicha prorektor <i></i> ${esc(s.prorector)}</div><div>Xodimlar bo'limi boshlig'i (tabel tuzuvchi): <i></i> ${esc(s.hr)}</div></div>`;
+   <tr>${dh}</tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="sign"><div>${esc(dept.title||"Bo'lim (kafedra) mudiri")}: <i></i> ${esc(dept.head)}</div><div>O'quv ishlari bo'yicha prorektor <i></i> ${esc(s.prorector)}</div><div>Xodimlar bo'limi boshlig'i (tabel tuzuvchi): <i></i> ${esc(s.hr)}</div></div>`;
 }
+
+/* ---------- Excel ---------- */
+let xlsxP=null;
+function loadXLSX(){
+  if(window.XLSX)return Promise.resolve(window.XLSX);
+  if(!xlsxP)xlsxP=new Promise((res,rej)=>{const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";sc.onload=()=>res(window.XLSX);sc.onerror=()=>{xlsxP=null;rej(new Error("Excel kutubxonasi yuklanmadi"))};document.head.appendChild(sc)});
+  return xlsxP;
+}
+function tabelSheet(X,T){
+  const[y,m]=T.ym.split("-").map(Number),n=T.days.length,W=4+n+4,blank=()=>Array(W).fill("");
+  const at=(c,txt)=>{const r=blank();r[c]=txt;return r};
+  const R=[at(W-8,'"TASDIQLAYMAN"'),at(W-8,T.set.institute+" rektori"),at(W-8,"____________________ "+T.set.rector),at(W-8,MONTHS[m-1]+" "+y+"-y."),blank(),
+    at(0,`${T.set.institute} ${T.dept.name} ishchi-xodimlariga ${y}-yil ${MONTHS[m-1].toLowerCase()} oyi uchun`),at(0,"TABEL"+(T.dept.kind?" — "+T.dept.kind:"")),blank(),
+    ["№","Familiyasi, ismi, sharifi","Lavozimi","Shtat birligi",...T.days.map(x=>x.d),"Ishlangan kun","Ishlangan soat","Me'yor soat","Farq"]];
+  T.rows.forEach((e,i)=>R.push([i+1,e.name,e.position,e.rate,...e.vals.map(v=>v.v),e.kun,e.soat,e.norm,e.farq]));
+  R.push(blank(),at(1,(T.dept.title||"Bo'lim (kafedra) mudiri")+": ____________ "+T.dept.head),at(1,"O'quv ishlari bo'yicha prorektor ____________ "+T.set.prorector),at(1,"Xodimlar bo'limi boshlig'i (tabel tuzuvchi): ____________ "+T.set.hr));
+  const ws=X.utils.aoa_to_sheet(R);
+  ws["!merges"]=[{s:{r:5,c:0},e:{r:5,c:W-1}},{s:{r:6,c:0},e:{r:6,c:W-1}}];
+  ws["!cols"]=[{wch:4},{wch:28},{wch:22},{wch:7},...T.days.map(()=>({wch:4})),{wch:9},{wch:9},{wch:9},{wch:7}];
+  return ws;
+}
+const sheetName=(n,used)=>{let b=String(n).replace(/[\[\]:*?\/\\]/g," ").slice(0,28)||"Tabel",x=b,i=2;while(used.has(x))x=b.slice(0,25)+" "+(i++);used.add(x);return x};
+async function exportExcel(depts,fname){
+  try{const X=await loadXLSX();const wb=X.utils.book_new(),used=new Set();
+    depts.forEach(d=>X.utils.book_append_sheet(wb,tabelSheet(X,tabelData(d)),sheetName(d.name,used)));
+    X.writeFile(wb,fname);toast("Excel fayl yuklandi")}catch(e){toast(e.message||"Excel yaratilmadi")}
+}
+function remindInfo(){const n=new Date(),cur=n.getFullYear()+"-"+p2(n.getMonth()+1),last=new Date(n.getFullYear(),n.getMonth()+1,0).getDate();
+  return{cur:U.ym===cur,past:U.ym<cur,left:last-n.getDate()}}
 
 /* ---------- views ---------- */
 function render(){
   const ae=document.activeElement;
   if(ae&&ae.closest&&ae.closest("#view")&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName)){dirty=true;return}
   dirty=false;S.depts.sort((a,b)=>(a.order||0)-(b.order||0));
-  const tabs=ROLE_TABS[U.role];if(!tabs.includes(U.tab))U.tab=tabs.includes("tabel")?"tabel":tabs[0];
+  const tabs=ROLE_TABS[U.role].filter(t=>t!=="jurnal"||STANDALONE);if(!tabs.includes(U.tab))U.tab=tabs.includes("tabel")?"tabel":tabs[0];
   $("#role").value=U.role;
   const dsel=$("#dept");dsel.innerHTML=deptOptions();
   if(!S.depts.find(d=>d.id===U.dept)&&S.depts[0])U.dept=S.depts[0].id;dsel.value=U.dept;dsel.disabled=STANDALONE&&U.role==="mudir";
@@ -279,7 +334,7 @@ function render(){
   if(!db){v.innerHTML=`<div class="card empty">Ma'lumotlar bazasi bu ko'rinishda ishlamaydi. Sahifani tizimga kirgan holda oching.</div>`;return}
   if(!Object.values(S.ready).every(Boolean)){v.innerHTML=`<div class="card empty">Yuklanmoqda…</div>`;return}
   if(!S.depts.length&&U.tab!=="sozlama"){v.innerHTML=`<div class="card empty">Hali bo'lim yo'q. Admin rolida «Sozlamalar» bo'limidan birinchi bo'limni qo'shing.</div>`;return}
-  ({holat:vHolat,tabel:vTabel,xodim:vXodim,sozlama:vSozlama})[U.tab](v);
+  ({holat:vHolat,tabel:vTabel,xodim:vXodim,sozlama:vSozlama,jurnal:vJurnal})[U.tab](v);
 }
 function deptOptions(){
   const groups={};S.depts.forEach(d=>{(groups[d.group||""]=groups[d.group||""]||[]).push(d)});
@@ -298,8 +353,11 @@ function vHolat(v){
   const nAp=cnt("approved");
   v.innerHTML=`<div class="strip"><h2>${MONTHS[ymParts()[1]-1]} ${ymParts()[0]}: bo'limlar holati</h2>
    <span class="note">Jami ${S.depts.length} · Tasdiqlangan ${nAp} · Tekshiruvda ${cnt("submitted")} · Qaytarilgan ${cnt("returned")} · Qoralama ${cnt("draft")}</span><div class="grow"></div>
-   <button class="btn" data-act="dlall" ${nAp?"":"disabled"}>Tasdiqlanganlarni bitta faylda yuklash (${nAp})</button>
+   <button class="btn" data-act="dlall" ${nAp?"":"disabled"}>Tasdiqlanganlarni chop etish (${nAp})</button>
+   <button class="btn" data-act="xlsall" ${nAp?"":"disabled"}>Tasdiqlanganlar Excel'da</button>
    ${(U.role==="kadr"||U.role==="admin")?`<button class="btn pri" data-act="newtabel">+ Yangi tabel</button>`:""}</div>
+   ${(()=>{const R=remindInfo(),left=S.depts.length-nAp;if(!left||!(R.past||(R.cur&&R.left<=5)))return"";
+     return `<div class="remind">${R.past?"Bu oy tugagan":"Oy tugashiga "+R.left+" kun qoldi"}: ${left} ta bo'lim tabeli hali tasdiqlanmagan. Holat bo'yicha filtrlab ko'ring.</div>`})()}
    <div class="row" style="margin-bottom:10px"><input type="text" id="h_q" placeholder="Bo'lim yoki fakultet qidirish" style="min-width:240px"><select id="h_st"><option value="">Hamma holat</option>${Object.keys(ST_NAME).map(k=>`<option value="${k}">${ST_NAME[k]}</option>`).join("")}</select></div>
    <div class="card scroll"><table class="list"><thead><tr><th>Bo'lim</th><th>Fakultet / guruh</th><th>Xodim</th><th>Holat</th><th>Oxirgi o'zgarish</th><th></th></tr></thead><tbody id="h_rows">${rows}</tbody></table></div>`;
 }
@@ -310,26 +368,29 @@ function filterHolat(){
 document.addEventListener("input",e=>{if(e.target.id==="h_q"||e.target.id==="h_st")filterHolat()});
 function vTabel(v){
   const dept=curDept();if(!dept)return;
-  const t=stOf(dept.id),ed=canEditDays(dept);
+  const t=stOf(dept.id),ed=canEditDays(dept),T=tabelData(dept);
   let acts="";
   if(U.role==="mudir"&&(t.status==="draft"||t.status==="returned"))acts+=`<button class="btn pri" data-act="submit">Tasdiqqa yuborish</button>`;
   if((U.role==="kadr"||U.role==="admin")&&t.status==="submitted")acts+=`<button class="btn pri" data-act="approve">Tasdiqlash</button><button class="btn" data-act="return">Qaytarish</button>`;
   if((U.role==="kadr"||U.role==="admin")&&t.status==="draft")acts+=`<button class="btn pri" data-act="approve">Tasdiqlash</button>`;
   if((U.role==="kadr"||U.role==="admin")&&t.status==="approved")acts+=`<button class="btn" data-act="reopen">Qayta ochish</button>`;
   if(U.role!=="buxg")acts+=`<button class="btn" data-act="newtabel">+ Yangi tabel</button>`;
-  acts+=`<button class="btn" data-act="dl">Chop etish uchun yuklab olish</button>`;
+  acts+=`<button class="btn" data-act="dl">Chop etish</button><button class="btn" data-act="xls">Excel</button>`;
   const hint=ed?"Kun yoki xodim ismini bosing: ta'til, kasallik yoki boshqa soat kiritiladi. Qolgan kunlar o'zi to'ladi."
     :(U.role==="buxg"?"Faqat ko'rish va yuklab olish.":t.status==="approved"?"Tasdiqlangan tabel o'zgarmaydi. O'zgartirish uchun kadrlar bo'limi qayta ochadi.":"Tekshiruvda. Kadrlar bo'limi tasdiqlaguncha o'zgartirib bo'lmaydi.");
   v.innerHTML=`<div class="strip"><h2>${esc(dept.name)}</h2>${badge(t.status)}<div class="grow"></div><div class="row">${acts}</div></div>
    ${t.status==="returned"&&t.note?`<div class="retnote"><b>Qaytarish sababi:</b> ${esc(t.note)}</div>`:""}
+   ${(()=>{const R=remindInfo();if(!(t.status==="draft"||t.status==="returned")||U.role==="buxg"||!(R.past||(R.cur&&R.left<=5)))return"";
+     return `<div class="remind">${R.past?"Bu oy tugagan, tabel hali topshirilmagan.":"Oy tugashiga "+R.left+" kun qoldi."} ${U.role==="mudir"?"Tabelni tekshirib «Tasdiqqa yuborish» tugmasini bosing.":""}</div>`})()}
+   ${(()=>T.frozen?`<div class="frozen">Tasdiqlangan holatda saqlangan nusxa ko'rsatilmoqda${t.at?" ("+new Date(t.at).toLocaleString("uz")+")":""}. Keyingi o'zgarishlar (stavka, xodimlar) bu tabelga ta'sir qilmaydi.</div>`:(t.status==="approved"?`<div class="remind">Bu tabel muzlatishdan oldin tasdiqlangan, joriy ma'lumotdan hisoblanyapti. Qayta ochib, qayta tasdiqlasangiz muzlatiladi.</div>`:""))()}
    <p class="note" style="margin:0 0 10px">${hint}</p>
-   <div class="paper">${tabelMarkup(dept,ed)}</div>
+   <div class="paper">${tabelMarkup(T,ed)}</div>
    <div class="legend"><span><span class="sw" style="background:var(--wk)"></span>Dam olish / bayram</span><span><span class="sw" style="background:var(--c-sick)"></span>Kasallik</span><span><span class="sw" style="background:var(--c-leave)"></span>Ta'til</span><span><span class="sw" style="background:var(--c-trip)"></span>Xizmat safari</span><span><span class="sw" style="box-shadow:inset 0 0 0 2px var(--accent)"></span>Qo'lda kiritilgan</span></div>`;
 }
 
 function vXodim(v){
   const blocks=[curDept()].filter(Boolean).map(d=>{const es=deptEmps(d.id);
-    const r=es.map((e,i)=>`<tr><td class="num">${i+1}</td><td>${esc(e.name)}</td><td>${esc(e.position)}</td><td class="num">${fmt(e.rate||1)}</td><td class="num">${fmt(e.h)} / ${fmt(e.sat||0)}</td><td><button class="btn" data-emp-edit="${esc(e.id)}">Tahrirlash</button></td></tr>`).join("")||`<tr><td colspan="6" class="note">Xodim yo'q</td></tr>`;
+    const r=es.map((e,i)=>`<tr><td class="num">${i+1}</td><td>${esc(e.name)}</td><td>${esc(e.position)}</td><td class="num">${fmt(e.rate||1)}</td><td class="num">${fmt(e.h)} / ${fmt(e.sat||0)}</td><td class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn mini" data-mv="${esc(e.id)}" data-dir="-1" ${i?"":"disabled"} aria-label="Yuqoriga">↑</button><button class="btn mini" data-mv="${esc(e.id)}" data-dir="1" ${i<es.length-1?"":"disabled"} aria-label="Pastga">↓</button><button class="btn mini" data-emp-edit="${esc(e.id)}">Tahrirlash</button></td></tr>`).join("")||`<tr><td colspan="6" class="note">Xodim yo'q</td></tr>`;
     return `<div class="card scroll" style="margin-bottom:14px"><div class="strip" style="margin-bottom:6px"><h2 style="font-size:15px">${esc(d.name)}</h2><span class="note">${es.length} xodim</span><div class="grow"></div><button class="btn" data-emp-bulk="${esc(d.id)}">Excel'dan qo'yish</button><button class="btn" data-emp-new="${esc(d.id)}">+ Xodim qo'shish</button></div>
      <table class="list"><thead><tr><th>№</th><th>F.I.Sh.</th><th>Lavozim</th><th>Stavka</th><th>Soat Du–Ju / Shanba</th><th></th></tr></thead><tbody>${r}</tbody></table></div>`}).join("");
   v.innerHTML=blocks;
@@ -342,10 +403,13 @@ function vSozlama(v){
    <label>Rektor<input type="text" id="s_rec" value="${esc(s.rector)}"></label>
    <label>O'quv ishlari prorektori<input type="text" id="s_pro" value="${esc(s.prorector)}"></label>
    <label class="full">Tabel tuzuvchi (Xodimlar bo'limi boshlig'i)<input type="text" id="s_hr" value="${esc(s.hr)}"></label>
-   <label class="full">Bayram va ko'chirilgan dam olish kunlari (har qatorda bitta sana, YYYY-OO-KK)<textarea id="s_hol">${esc((s.holidays||[]).slice().sort().join("\n"))}</textarea></label></div>
+   <label class="full">Bayram va ko'chirilgan dam olish kunlari (har qatorda bitta sana, YYYY-OO-KK)<textarea id="s_hol">${esc((s.holidays||[]).slice().sort().join("\n"))}</textarea></label>
+   <label class="full">Ish kuniga aylantirilgan dam olish kunlari (masalan ko'chirilgan shanba)<textarea id="s_wd" style="min-height:70px">${esc((s.workdays||[]).slice().sort().join("\n"))}</textarea></label>
+   <label class="full">Bayram oldi qisqartirilgan kunlar (−1 soat)<textarea id="s_sh" style="min-height:70px">${esc((s.shortDays||[]).slice().sort().join("\n"))}</textarea></label>
+   <label>Kunlik me'yor soati (1 stavka)<input type="number" id="s_nh" min="1" max="12" step="0.5" value="${esc(s.normHours||8)}"></label></div>
    <button class="btn pri" data-act="saveset">Saqlash</button></div>
    <div class="card"><h3 style="margin-top:0">Bo'limlar</h3>
-   <div class="scroll" style="max-height:420px;overflow:auto"><table class="list"><thead><tr><th>Bo'lim nomi</th><th>Fakultet / guruh</th><th>Mudir (imzo uchun)</th><th>Turi</th></tr></thead><tbody>${S.depts.map(d=>`<tr><td><input type="text" data-dname="${esc(d.id)}" value="${esc(d.name)}" style="width:100%"></td><td><input type="text" data-dgroup="${esc(d.id)}" value="${esc(d.group||"")}" style="width:100%"></td><td><input type="text" data-dhead="${esc(d.id)}" value="${esc(d.head||"")}" style="width:100%"></td><td><select data-dkind="${esc(d.id)}"><option value="">—</option><option ${d.kind==="BUDJET"?"selected":""}>BUDJET</option><option ${d.kind==="KONTRAKT"?"selected":""}>KONTRAKT</option></select></td></tr>`).join("")}</tbody></table></div>
+   <div class="scroll" style="max-height:420px;overflow:auto"><table class="list"><thead><tr><th>Bo'lim nomi</th><th>Fakultet / guruh</th><th>Mudir (imzo uchun)</th><th>Turi</th><th></th></tr></thead><tbody>${S.depts.map(d=>`<tr><td><input type="text" data-dname="${esc(d.id)}" value="${esc(d.name)}" style="width:100%"></td><td><input type="text" data-dgroup="${esc(d.id)}" value="${esc(d.group||"")}" style="width:100%"></td><td><input type="text" data-dhead="${esc(d.id)}" value="${esc(d.head||"")}" style="width:100%"></td><td><select data-dkind="${esc(d.id)}"><option value="">—</option><option ${d.kind==="BUDJET"?"selected":""}>BUDJET</option><option ${d.kind==="KONTRAKT"?"selected":""}>KONTRAKT</option></select></td><td><button class="btn mini dng" data-ddel="${esc(d.id)}">O'chirish</button></td></tr>`).join("")}</tbody></table></div>
    <div class="row" style="margin-top:12px"><button class="btn" data-act="savedept">Bo'limlarni saqlash</button><button class="btn" data-act="newdept">+ Yangi bo'lim</button></div>
    <p class="note">Bo'lim nomi tabel sarlavhasiga, mudir ismi imzo qatoriga yoziladi.</p>
    <h3 style="margin:18px 0 6px;font-size:14px">Ro'yxatdan qo'shish</h3>
@@ -353,7 +417,23 @@ function vSozlama(v){
    <textarea id="d_bulk" placeholder="Fizika-matematika fakulteti; Matematika kafedrasi; Karimov A."></textarea>
    <div class="row" style="margin-top:8px"><button class="btn" data-act="bulkdept">Qo'shish</button></div>
    ${STANDALONE?`<h3 style="margin:18px 0 6px;font-size:14px">Bo'lim mudirlari parollari</h3><p class="note" style="margin:0 0 6px">Parolsiz bo'limlar uchun tasodifiy parol yaratiladi. Parollar faqat shu paytda ko'rinadi, nusxalab oling.</p>
-   <div class="row"><button class="btn" data-act="genpass">Parollarni yaratish</button><label class="note"><input type="checkbox" id="g_all"> hammasini qayta yaratish</label></div>`:""}</div></div>`;
+   <div class="row"><button class="btn" data-act="genpass">Parollarni yaratish</button><label class="note"><input type="checkbox" id="g_all"> hammasini qayta yaratish</label></div>`:""}</div>
+   ${STANDALONE?`<div class="card"><h3 style="margin-top:0">Zaxira nusxa</h3>
+   <p class="note">Barcha ma'lumot (bo'limlar, xodimlar, istisnolar, tabellar, sozlamalar) bitta JSON faylga yuklanadi. Har oy oxirida yuklab, xavfsiz joyda saqlang.</p>
+   <div class="row"><button class="btn pri" data-act="backup">Zaxirani yuklab olish</button></div>
+   <h3 style="margin:18px 0 6px;font-size:14px">Zaxiradan tiklash</h3>
+   <p class="note" style="margin:0 0 6px">Hozirgi hamma ma'lumot fayldagisi bilan almashtiriladi.</p>
+   <div class="row"><input type="file" id="r_file" accept=".json,application/json"><button class="btn dng" data-act="restore">Tiklash</button></div></div>`:""}</div>`;
+}
+
+let AUD={ym:"",list:null,at:0,busy:false};
+function vJurnal(v){
+  if(AUD.ym!==U.ym||Date.now()-AUD.at>60000){if(!AUD.busy){AUD.busy=true;db.audit(U.ym).then(l=>{AUD={ym:U.ym,list:l,at:Date.now(),busy:false};render()}).catch(e=>{AUD.busy=false;toast(e.message||"Jurnal yuklanmadi")})}}
+  const OPN={set:"saqladi",update:"o'zgartirdi",delete:"o'chirdi",login:"kirdi",genpass:"parol yaratdi",backup:"zaxira oldi",restore:"zaxiradan tikladi"};
+  const COLN={exceptions:"Istisno",tabels:"Tabel",employees:"Xodim",departments:"Bo'lim",settings:"Sozlamalar"};
+  const list=AUD.ym===U.ym&&AUD.list?AUD.list:null;
+  v.innerHTML=`<div class="strip"><h2>${MONTHS[ymParts()[1]-1]} ${ymParts()[0]}: o'zgarishlar jurnali</h2><span class="note">Kim, qachon, nimani o'zgartirgani (oxirgi 1000 ta)</span></div>
+   <div class="card scroll">${list?(list.length?`<table class="list"><thead><tr><th>Vaqt</th><th>Kim</th><th>Amal</th><th>Nima</th></tr></thead><tbody>${list.map(x=>`<tr><td class="num note">${new Date(x.at).toLocaleString("uz")}</td><td>${esc(x.who)}</td><td>${esc((COLN[x.col]?COLN[x.col]+": ":"")+(OPN[x.op]||x.op))}</td><td>${esc(x.s||"")}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Bu oyda yozuv yo'q.</div>`):`<div class="empty">Yuklanmoqda…</div>`}</div>`;
 }
 
 /* ---------- panel ---------- */
@@ -433,7 +513,9 @@ function openReturn(){
 }
 async function setStatus(status,note){
   const d=curDept();
-  try{await db.doc("tabels/"+tabelKey(d.id)).set({status,note:note||"",by:{mudir:"Bo'lim mudiri",kadr:"Kadrlar bo'limi",admin:"Admin",buxg:"Buxgalter"}[U.role],at:Date.now()});
+  const data={status,note:note||"",by:ROLE_LABEL[U.role],at:Date.now()};
+  if(status==="approved"){const T=tabelData(d,true);delete T.frozen;data.snap=T}
+  try{await db.doc("tabels/"+tabelKey(d.id)).set(data);
     toast({submitted:"Tasdiqqa yuborildi",approved:"Tabel tasdiqlandi",returned:"Qaytarildi",draft:"Qayta ochildi"}[status])}
   catch(e){toast("Saqlanmadi: "+(e.message||e.code))}
 }
@@ -466,7 +548,7 @@ td.l{text-align:left;white-space:nowrap}td.d,th.dh{width:17px;padding:0}.wk,td.o
 .sign{margin-top:16px;font-size:11px;font-weight:700;display:grid;gap:8px}.sign div{display:flex;gap:30px;align-items:baseline}.sign i{width:160px;border-bottom:1px solid #000}`;
 async function download(){
   const d=curDept();
-  const html=`<!doctype html><html lang="uz"><head><meta charset="utf-8"><title>Tabel ${esc(d.name)} ${U.ym}</title><style>${PRINT_CSS}</style></head><body>${tabelMarkup(d,false)}</body></html>`;
+  const html=`<!doctype html><html lang="uz"><head><meta charset="utf-8"><title>Tabel ${esc(d.name)} ${U.ym}</title><style>${PRINT_CSS}</style></head><body>${tabelMarkup(tabelData(d),false)}</body></html>`;
   const slug=d.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"bolim";
   const dl=await getDl();
   if(!dl)return toast("Yuklab olish bu ko'rinishda mavjud emas");
@@ -477,7 +559,7 @@ async function download(){
 async function downloadAll(){
   const ds=S.depts.slice().sort((a,b)=>(a.group||"").localeCompare(b.group||"")||(a.order||0)-(b.order||0)).filter(d=>stOf(d.id).status==="approved");
   if(!ds.length)return toast("Tasdiqlangan tabel yo'q");
-  const body=ds.map(d=>`<section style="page-break-after:always">${tabelMarkup(d,false)}</section>`).join("");
+  const body=ds.map(d=>`<section style="page-break-after:always">${tabelMarkup(tabelData(d),false)}</section>`).join("");
   const html=`<!doctype html><html lang="uz"><head><meta charset="utf-8"><title>Tabellar ${U.ym}</title><style>${PRINT_CSS}</style></head><body>${body}</body></html>`;
   const dl=await getDl();
   if(!dl)return toast("Yuklab olish bu ko'rinishda mavjud emas");
@@ -494,6 +576,11 @@ document.addEventListener("click",async ev=>{
   if(t.dataset.empEdit)return openEmp(t.dataset.empEdit);
   if(t.dataset.empNew)return openEmp(null,t.dataset.empNew);
   if(t.dataset.empBulk)return openBulkEmp(t.dataset.empBulk);
+  if(t.dataset.mv){const e=S.emps.find(x=>x.id===t.dataset.mv);if(!e)return;const es=deptEmps(e.deptId),i=es.indexOf(e),j=i+(+t.dataset.dir);if(j<0||j>=es.length)return;
+    [es[i],es[j]]=[es[j],es[i]];const ops=es.map((x,k)=>({x,k})).filter(({x,k})=>x.no!==k+1).map(({x,k})=>({op:"update",col:"employees",id:x.id,data:{no:k+1}}));
+    try{if(db.batch)await db.batch(ops);else for(const o of ops)await db.collection("employees").doc(o.id).update(o.data)}catch(er){toast("Xatolik: "+(er.message||er.code))}return}
+  if(t.dataset.ddel){if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Rostdanmi?";return}
+    try{await db.collection("departments").doc(t.dataset.ddel).delete();toast("Bo'lim o'chirildi")}catch(er){toast(er.message||"Xatolik")}return}
   if(t.dataset.delx){try{await db.collection("exceptions").doc(t.dataset.delx).delete()}catch(e){toast("Xatolik: "+(e.message||e.code))}return}
   if(t.tagName==="TD"&&t.dataset.emp&&t.closest("table.edit"))return openExc(t.dataset.emp,t.dataset.d?+t.dataset.d:1);
   const a=t.dataset.act;if(!a)return;
@@ -504,8 +591,10 @@ document.addEventListener("click",async ev=>{
   else if(a==="dl")download();
   else if(a==="newtabel")openNew();
   else if(a==="saveset"){
-    const hol=$("#s_hol").value.split(/\s+/).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x));
-    try{await db.doc("settings/main").set({institute:$("#s_inst").value.trim(),rector:$("#s_rec").value.trim(),prorector:$("#s_pro").value.trim(),hr:$("#s_hr").value.trim(),holidays:hol});toast("Saqlandi")}catch(e){toast("Xatolik: "+(e.message||e.code))}}
+    const dates=id=>[...new Set($(id).value.split(/[\s,;]+/).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x)))].sort();
+    const bad=["#s_hol","#s_wd","#s_sh"].some(id=>$(id).value.split(/[\s,;]+/).filter(Boolean).some(x=>!/^\d{4}-\d{2}-\d{2}$/.test(x)));
+    if(bad)return toast("Sanalarni YYYY-OO-KK ko'rinishida yozing, masalan 2026-03-21");
+    try{await db.doc("settings/main").set({institute:$("#s_inst").value.trim(),rector:$("#s_rec").value.trim(),prorector:$("#s_pro").value.trim(),hr:$("#s_hr").value.trim(),holidays:dates("#s_hol"),workdays:dates("#s_wd"),shortDays:dates("#s_sh"),normHours:parseFloat($("#s_nh").value)||8});toast("Saqlandi")}catch(e){toast("Xatolik: "+(e.message||e.code))}}
   else if(a==="savedept"){
     try{for(const d of S.depts){const n=document.querySelector(`[data-dname="${d.id}"]`),k=document.querySelector(`[data-dkind="${d.id}"]`);
       const g=document.querySelector(`[data-dgroup="${d.id}"]`),h=document.querySelector(`[data-dhead="${d.id}"]`);
@@ -517,6 +606,17 @@ document.addEventListener("click",async ev=>{
       await db.collection("departments").add({name:nm,group:g,head:hd,kind:"",order:++o})}
       $("#d_bulk").value="";toast(lines.length+" ta bo'lim qo'shildi")}catch(e){toast("Xatolik: "+(e.message||e.code))}}
   else if(a==="dlall")downloadAll();
+  else if(a==="xls"){const d=curDept();exportExcel([d],`tabel-${(d.name||"bolim").replace(/[^\wА-Яа-яЎўҚқҒғҲҳ'-]+/g,"_")}-${U.ym}.xlsx`)}
+  else if(a==="xlsall"){const ds=S.depts.slice().sort((a,b)=>(a.group||"").localeCompare(b.group||"")||(a.order||0)-(b.order||0)).filter(d=>stOf(d.id).status==="approved");exportExcel(ds,`tabellar-${U.ym}.xlsx`)}
+  else if(a==="backup"){
+    try{const b=await db.backup();const url=URL.createObjectURL(new Blob([JSON.stringify(b,null,1)],{type:"application/json"}));
+      const el=document.createElement("a");el.href=url;el.download=`tabel-zaxira-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);toast("Zaxira yuklandi")}
+    catch(er){toast(er.message||"Xatolik")}}
+  else if(a==="restore"){
+    const f=$("#r_file").files[0];if(!f)return toast("Avval zaxira faylini tanlang");
+    if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Hamma ma'lumot almashtiriladi. Tasdiqlaysizmi?";return}
+    try{const obj=JSON.parse(await f.text());await db.restore(obj);toast("Zaxiradan tiklandi")}catch(er){toast(er.message||"Fayl o'qilmadi")}
+    t.dataset.sure="";t.textContent="Tiklash"}
   else if(a==="genpass"){
     try{const r=await db.genpass($("#g_all")&&$("#g_all").checked);
       const txt=r.list.map(x=>[x.group,x.name,x.pass].join("\t")).join("\n");
@@ -544,6 +644,7 @@ $("#prev").onclick=()=>shift(-1);$("#next").onclick=()=>shift(1);
     if(!AUTH.load()){showLogin();return}
     U.role=AUTH.role;if(AUTH.dept)U.dept=AUTH.dept;
     $("#role").disabled=true;$("#logout").hidden=false;$("#logout").onclick=logout;
+    if(AUTH.who){$("#whoami").textContent=AUTH.who;$("#whoami").hidden=false}
   }
   render();
   db=STANDALONE?makeDb():await claude.use("db").catch(()=>null);
