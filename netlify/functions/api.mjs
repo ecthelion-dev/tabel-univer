@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import seed from "./seed.mjs";
 
 const COLS = ["employees", "departments", "exceptions", "tabels", "settings"];
-const env = (k) => process.env[k] || "";
+const env = (k) => { try { const v = globalThis.Netlify?.env?.get?.(k); if (v) return v; } catch {} return process.env[k] || ""; };
 const store = () => globalThis.__TEST_STORE || getStore({ name: "tabel", consistency: "strong" });
 const SECRET = () => env("SECRET") || env("ADMIN_PASS");
 const sign = (p) => crypto.createHmac("sha256", SECRET()).update(p).digest("base64url");
