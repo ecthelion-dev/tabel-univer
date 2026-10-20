@@ -40,6 +40,12 @@ O'zgaruvchilarni kiritgach saytni qayta deploy qiling.
 4. Sozlamalarda "Parollarni yaratish" tugmasini bosing va har bo'lim mudiriga o'z parolini bering.
 
 ## Imkoniyatlar
+- **UZASBO bilan ishlash:**
+  - *Xodimlarni yuklash* (Xodimlar → «UZASBO'dan yuklash»): UZASBO'dan olingan tabel fayllari (.xlsm, bir nechtasini birdan) o'qiladi. Har lavozim «Док. прием» raqami bo'yicha alohida qator; o'rindoshlar belgilanadi. Yangilari «Taqsimlanmagan» ro'yxatiga tushadi, qayta yuklanganda borlari yangilanadi (bo'limi saqlanadi).
+  - *Biriktirish*: kadrlar bo'limi «Taqsimlanmagan» ro'yxatidan belgilab bo'limga o'tkazadi; mudir o'z bo'limidan «Taqsimlanmaganlardan qo'shish» orqali o'z xodimlarini tanlaydi.
+  - *To'ldirib qaytarish* (Holat → «UZASBO fayllarini to'ldirish»): shu oyning UZASBO fayli tanlanadi, tizim oylik tabel bo'yicha haqiqatda ishlangan kun (J) va soat (K) ni yozadi, o'zgargan qatorga «Изменилось = Ха» qo'yadi. Fayl formati, makrosi va boshqa ustunlari o'zgarmaydi — to'g'ridan-to'g'ri UZASBO'ga yuklanadi. Soatbay (me'yori 0) qatorlarga tegilmaydi.
+- **Ish grafiklari:** 6 kunlik 36 soat (kuniga 6 soat) va 6 kunlik 40 soat (Du–Ju 7, Sh 5 soat); soat stavkaga ko'paytiriladi. Bayram oldi ish kuni avtomatik 1 soat (stavkaga mutanosib) qisqartiriladi. 2026-yil sentyabr uchun 1065 lavozimning hammasida UZASBO me'yori bilan to'liq mos keldi.
+- **O'rindosh:** kasallik yoki ta'til kiritilganda shu xodimning boshqa lavozimlariga ham bir yo'la yozish taklif qilinadi.
 - **Avans va oylik:** har oy ikki tabel. Avans tabeli 1–15 kunlar uchun (muddat 15-sana), oylik tabeli to'liq oy uchun. Ikkalasi alohida topshiriladi, tasdiqlanadi, chop etiladi va Excel'ga chiqariladi. Avans tabeli tekshiruvda turganda mudir 1–15 kunlarni o'zgartira olmaydi.
 - **Muzlatish:** tasdiqlangan tabel o'sha paytdagi holatida saqlanadi. Keyin stavka, xodim yoki sozlama o'zgarsa ham tasdiqlangan oy o'zgarmaydi. "Qayta ochish" muzlatishni bekor qiladi.
 - **Kalendar (Sozlamalar):** bayramlar, ish kuniga aylantirilgan dam olish kunlari, bayram oldi qisqartirilgan kunlar (−1 soat), kunlik me'yor soati.

@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import seed from "./seed.mjs";
 
 const COLS = ["employees", "departments", "exceptions", "tabels", "settings"];
+const POOL = "taqsim"; // UZASBO'dan yuklangan, hali bo'limga biriktirilmagan xodimlar
 const ROLE_LABEL = { admin: "Admin", kadr: "Kadrlar bo'limi", buxg: "Buxgalter", mudir: "Bo'lim mudiri" };
 const MAX_FAILS = 8, LOCK_MS = 15 * 60e3;
 
@@ -96,13 +97,13 @@ function view(m, a) {
   let depts = Object.entries(m.departments);
   let emps = Object.entries(m.employees);
   if (a.role === "mudir") {
-    depts = depts.filter(([id]) => id === a.dept);
-    emps = emps.filter(([, e]) => e.deptId === a.dept);
+    depts = depts.filter(([id]) => id === a.dept || id === POOL);
+    emps = emps.filter(([, e]) => e.deptId === a.dept || e.deptId === POOL);
   }
-  const empIds = new Set(emps.map(([id]) => id));
   out.departments = Object.fromEntries(depts.map(([id, d]) => [id, clean(d)]));
   out.employees = Object.fromEntries(emps);
-  out.exceptions = Object.fromEntries(Object.entries(m.exceptions).filter(([, x]) => a.role !== "mudir" || empIds.has(x.empId)));
+  const ownIds = new Set(emps.filter(([, e]) => e.deptId !== POOL || a.role !== "mudir").map(([id]) => id));
+  out.exceptions = Object.fromEntries(Object.entries(m.exceptions).filter(([, x]) => a.role !== "mudir" || ownIds.has(x.empId)));
   out.tabels = Object.fromEntries(Object.entries(m.tabels).filter(([k]) => a.role !== "mudir" || k.startsWith(a.dept + "_")));
   out.settings = m.settings;
   return out;
@@ -113,15 +114,17 @@ const editable = (t) => !t || t.status === "draft" || t.status === "returned";
 function allowed(a, op, c, id, data, m) {
   if (a.role === "admin") return true;
   if (a.role === "buxg") return false;
-  if (a.role === "kadr") return ["employees", "exceptions", "tabels"].includes(c);
+  if (a.role === "kadr") return ["employees", "exceptions", "tabels"].includes(c) || (c === "departments" && id === POOL && op === "set");
   if (a.role === "mudir") {
     if (c === "employees") {
       // Mudir faqat o'z bo'limi xodimlarini qo'shadi, tahrirlaydi, o'chiradi; boshqa bo'limga o'tkaza olmaydi
       const old = m.employees[id];
+      const next = { ...(old || {}), ...(data || {}) };
+      // Taqsimlanmagan ro'yxatdan faqat o'z bo'limiga olish mumkin
+      if (old && old.deptId === POOL) return op === "update" && next.deptId === a.dept;
       if (old && old.deptId !== a.dept) return false;
       if (op === "delete") return !!old;
-      const next = { ...(old || {}), ...(data || {}) };
-      return next.deptId === a.dept;
+      return next.deptId === a.dept || (!!old && next.deptId === POOL);
     }
     if (c === "exceptions") {
       const old = m.exceptions[id];
