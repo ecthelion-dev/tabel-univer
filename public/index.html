@@ -97,6 +97,7 @@ table.tab th.fix,table.tab td.fix{position:sticky;left:0;background:var(--paper)
 #whoami{font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mini{padding:3px 8px;font-size:12px}
 .fbar select{max-width:260px;min-width:0}
+.tag0{background:var(--bg);color:var(--muted)}.tag2{background:var(--st-sub-bg);color:var(--st-sub)}
 .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:99px;background:var(--accent-soft);color:var(--accent);margin-left:6px;vertical-align:1px;white-space:nowrap}
 .pick{max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:6px}
 .pick label{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
@@ -316,6 +317,15 @@ function calcEmp(emp,upto=dim()){
 }
 const personKey=e=>String(e.name||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu,"");
 const titleCase=s=>String(s).toLowerCase().replace(/(^|[\s-])(\p{L})/gu,(m,a,b)=>a+b.toUpperCase());
+const ETYPE={asosiy:"Asosiy ish joyi",ichki:"Ichki o'rindosh",tashqi:"Tashqi o'rindosh"};
+const etypeOf=t=>{t=String(t||"").toLowerCase();return /асосий|asosiy/.test(t)?"asosiy":/ички|ichki/.test(t)?"ichki":/ташқи|ташки|tashqi/.test(t)?"tashqi":""};
+// lavozim turi belgisi: UZASBO turidan, bo'lmasa bir nechta lavozimdan aniqlanadi
+function typeTag(e){
+  if(e.etype==="ichki"||e.etype==="tashqi")return `<span class="tag${e.etype==="tashqi"?" tag2":""}" title="${ETYPE[e.etype]}">${e.etype==="ichki"?"ichki o'rindosh":"tashqi o'rindosh"}</span>`;
+  const o=orCount(e);
+  if(e.etype==="asosiy")return o?`<span class="tag tag0" title="Asosiy ish joyi, yana ${o} ta lavozimi bor">asosiy</span>`:"";
+  return o?`<span class="tag" title="${o+1} ta lavozimda ishlaydi">o'rindosh</span>`:"";
+}
 const graphLabel=e=>GRAPHS[e.g]?GRAPHS[e.g].label:`${fmt(+e.h||0)} / ${fmt(+e.sat||0)} soat`;
 // Tez: har xodim kaliti bir marta hisoblanadi, o'rindoshlar soni bitta xaritada
 const pkey=e=>e.__pk||(e.__pk=personKey(e));
@@ -487,12 +497,12 @@ function vTabel(v){
 
 /* ---------- Xodimlar ro'yxati: filtr + 100 talik sahifalar ---------- */
 const PAGE=100;
-const XF={dept:"",page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false};
+const XF={dept:"",page:0,q:"",pos:"",g:"",rate:"",src:"",et:"",orin:false};
 const SEL=new Set();
 const eq=e=>e.__q||(e.__q=(e.name+" "+e.position+" "+(e.tabNo||"")).toLowerCase());
 function applyFilters(list,F){const q=F.q.trim().toLowerCase();
   return list.filter(e=>(!q||eq(e).includes(q))&&(!F.pos||e.position===F.pos)&&(!F.g||(F.g==="x"?!GRAPHS[e.g]:e.g===F.g))
-    &&(!F.rate||String(+(e.rate||1))===F.rate)&&(!F.src||String(e.src||"")===F.src)&&(!F.orin||orCount(e)>0))}
+    &&(!F.rate||String(+(e.rate||1))===F.rate)&&(!F.et||(F.et==="none"?!e.etype:e.etype===F.et))&&(!F.src||String(e.src||"")===F.src)&&(!F.orin||orCount(e)>0))}
 function optsOf(list,key,label){const m=new Map();for(const e of list){const k=key(e);if(k!=="")m.set(k,(m.get(k)||0)+1)}
   return[...m.entries()].sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0]))).map(([k,n])=>`<option value="${esc(k)}">${esc(label?label(k):k)} (${n})</option>`).join("")}
 function filterBar(list,F,pfx){
@@ -502,6 +512,7 @@ function filterBar(list,F,pfx){
     ${sel("pos","Hamma lavozim",optsOf(list,e=>e.position),F.pos)}
     ${sel("g","Hamma grafik",optsOf(list,e=>GRAPHS[e.g]?e.g:"x",k=>k==="x"?"Boshqa":GRAPHS[k].label),F.g)}
     ${sel("rate","Hamma stavka",optsOf(list,e=>String(+(e.rate||1)),k=>k+" stavka"),F.rate)}
+    ${list.some(e=>e.etype)?sel("et","Hamma turi",optsOf(list,e=>e.etype||"none",k=>ETYPE[k]||"Turi belgilanmagan"),F.et):""}
     ${list.some(e=>e.src)?sel("src","Hamma fayl",optsOf(list,e=>String(e.src||""),k=>"Fayl "+k),F.src):""}
     <label class="note" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="${pfx}_orin" ${F.orin?"checked":""}> faqat o'rindoshlar</label>
     <button class="btn mini" data-act="${pfx}_clear">Tozalash</button></div>`;
@@ -515,7 +526,7 @@ function pagerHtml(total,page,start,shown){
 }
 function vXodim(v){
   const d=curDept();if(!d)return;
-  if(XF.dept!==d.id){Object.assign(XF,{dept:d.id,page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false});SEL.clear()}
+  if(XF.dept!==d.id){Object.assign(XF,{dept:d.id,page:0,q:"",pos:"",g:"",rate:"",src:"",et:"",orin:false});SEL.clear()}
   const all=deptEmps(d.id),pool=isPool(d),canAdmin=U.role==="kadr"||U.role==="admin";
   const poolN=pool?all.length:S.emps.filter(e=>e.deptId===POOL).length;
   v.innerHTML=`<div class="card" style="margin-bottom:14px"><div class="strip" style="margin-bottom:6px"><h2 style="font-size:15px">${esc(d.name)}</h2><span class="note">${all.length} lavozim · ${new Set(all.map(pkey)).size} xodim</span><div class="grow"></div>
@@ -540,8 +551,8 @@ function drawXList(){
   const list=pool?applyFilters(all,XF).sort((a,b)=>a.name.localeCompare(b.name)):applyFilters(all,XF);
   const pages=Math.max(1,Math.ceil(list.length/PAGE));if(XF.page>=pages)XF.page=pages-1;if(XF.page<0)XF.page=0;
   const start=XF.page*PAGE,part=list.slice(start,start+PAGE),filtered=list.length!==all.length,idx=new Map(all.map((e,i)=>[e.id,i]));
-  $("#x_rows").innerHTML=part.map((e,k)=>{const i=idx.get(e.id),o=orCount(e);
-    return `<tr>${pool?`<td><input type="checkbox" class="pk" value="${esc(e.id)}" ${SEL.has(e.id)?"checked":""} aria-label="Tanlash"></td>`:""}<td class="num">${pool?start+k+1:i+1}</td><td>${esc(e.name)}${o?`<span class="tag" title="${o+1} ta lavozimda ishlaydi">o'rindosh</span>`:""}</td><td>${esc(e.position)}</td><td class="num">${fmt(e.rate||1)}</td><td class="note">${esc(graphLabel(e))}</td><td class="num note">${esc(e.tabNo||"")}</td>
+  $("#x_rows").innerHTML=part.map((e,k)=>{const i=idx.get(e.id);
+    return `<tr>${pool?`<td><input type="checkbox" class="pk" value="${esc(e.id)}" ${SEL.has(e.id)?"checked":""} aria-label="Tanlash"></td>`:""}<td class="num">${pool?start+k+1:i+1}</td><td>${esc(e.name)}${typeTag(e)}</td><td>${esc(e.position)}</td><td class="num">${fmt(e.rate||1)}</td><td class="note">${esc(graphLabel(e))}</td><td class="num note">${esc(e.tabNo||"")}</td>
     <td><div class="row" style="gap:4px;flex-wrap:nowrap;justify-content:flex-end">${pool?"":`<button class="btn mini" data-mv="${esc(e.id)}" data-dir="-1" ${i&&!filtered?"":"disabled"} aria-label="Yuqoriga">↑</button><button class="btn mini" data-mv="${esc(e.id)}" data-dir="1" ${i<all.length-1&&!filtered?"":"disabled"} aria-label="Pastga">↓</button>`}<button class="btn mini" data-emp-edit="${esc(e.id)}">Tahrirlash</button><button class="btn mini dng" data-edel="${esc(e.id)}" title="Xodimni o'chirish">O'chirish</button></div></td></tr>`}).join("")
     ||`<tr><td colspan="8" class="note">${all.length?"Filtr bo'yicha hech kim topilmadi":"Xodim yo'q"}</td></tr>`;
   $("#x_pager").innerHTML=pagerHtml(list.length,XF.page,start,part.length);
@@ -554,16 +565,16 @@ document.addEventListener("input",e=>{const id=e.target.id;
   if(id==="xf_q"){clearTimeout(xqT);xqT=setTimeout(()=>{XF.q=e.target.value;XF.page=0;drawXList()},160)}
   if(id==="fp_q"){clearTimeout(xqT);xqT=setTimeout(()=>{FP.q=e.target.value;FP.page=0;drawFP()},160)}});
 document.addEventListener("change",e=>{const t=e.target,id=t.id;
-  const m=id.match(/^(xf|fp)_(pos|g|rate|src|orin)$/);
+  const m=id.match(/^(xf|fp)_(pos|g|rate|src|et|orin)$/);
   if(m){const F=m[1]==="xf"?XF:FP;F[m[2]]=m[2]==="orin"?t.checked:t.value;F.page=0;m[1]==="xf"?drawXList():drawFP()}
   if(t.classList.contains("pk")){t.checked?SEL.add(t.value):SEL.delete(t.value);const sn=$("#sel_n");if(sn)sn.textContent="Tanlangan: "+SEL.size}
   if(t.classList.contains("fpk")){t.checked?FPSEL.add(t.value):FPSEL.delete(t.value);const n=$("#fp_n");if(n)n.textContent=FPSEL.size+" ta tanlandi"}});
 
 /* ---------- Taqsimlanmaganlardan biriktirish (mudir va kadrlar) ---------- */
-const FP={page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false};
+const FP={page:0,q:"",pos:"",g:"",rate:"",src:"",et:"",orin:false};
 const FPSEL=new Set();
 function openFromPool(){
-  const d=curDept();Object.assign(FP,{page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false});FPSEL.clear();
+  const d=curDept();Object.assign(FP,{page:0,q:"",pos:"",g:"",rate:"",src:"",et:"",orin:false});FPSEL.clear();
   const all=S.emps.filter(e=>e.deptId===POOL);
   openPanel(`<h3>Taqsimlanmaganlardan qo'shish</h3><div class="note">«${esc(d.name)}» bo'limiga o'tkaziladigan lavozimlarni belgilang. Belgilashlar sahifalar orasida saqlanadi.</div>
    <div style="margin:12px 0 0">${filterBar(all,FP,"fp")}</div>
@@ -579,7 +590,7 @@ function drawFP(){
   const list=applyFilters(S.emps.filter(e=>e.deptId===POOL),FP).sort((a,b)=>a.name.localeCompare(b.name));
   const pages=Math.max(1,Math.ceil(list.length/PAGE));if(FP.page>=pages)FP.page=pages-1;if(FP.page<0)FP.page=0;
   const start=FP.page*PAGE,part=list.slice(start,start+PAGE);
-  $("#fp_list").innerHTML=part.map(e=>`<label><input type="checkbox" class="fpk" value="${esc(e.id)}" ${FPSEL.has(e.id)?"checked":""}><span><b>${esc(e.name)}</b>${orCount(e)?`<span class="tag">o'rindosh</span>`:""}<small>${esc(e.position)} · stavka ${fmt(e.rate||1)} · ${esc(graphLabel(e))}${e.tabNo?" · tab.№ "+esc(e.tabNo):""}</small></span></label>`).join("")||`<div class="note" style="padding:12px">Hech kim topilmadi</div>`;
+  $("#fp_list").innerHTML=part.map(e=>`<label><input type="checkbox" class="fpk" value="${esc(e.id)}" ${FPSEL.has(e.id)?"checked":""}><span><b>${esc(e.name)}</b>${typeTag(e)}<small>${esc(e.position)} · stavka ${fmt(e.rate||1)} · ${esc(graphLabel(e))}${e.tabNo?" · tab.№ "+esc(e.tabNo):""}</small></span></label>`).join("")||`<div class="note" style="padding:12px">Hech kim topilmadi</div>`;
   $("#fp_pager").innerHTML=pagerHtml(list.length,FP.page,start,part.length).replace(/data-pg=/g,"data-fpg=");
   $("#fp_n").textContent=FPSEL.size+" ta tanlandi";
 }
@@ -604,8 +615,12 @@ async function readUzasbo(file){
   if(hdr<0)throw new Error(file.name+": UZASBO tabel shabloni emas (sarlavha topilmadi)");
   for(let i=hdr+1;i<rows.length;i++){const r=rows[i];if(!r||r[3]==null||!/^\d+$/.test(String(r[0]??"").trim()))continue;
     if(!month)month=excelMonth(r[19]);
+    const tcell=r.find(x=>typeof x==="string"&&/асосий иш|ўриндош|уриндош/i.test(x));
     out.push({row:i+1,tabNo:String(r[1]??"").trim(),name:String(r[2]||"").trim().replace(/\s+/g," "),docId:String(r[3]).trim(),position:String(r[4]||"").trim().replace(/\s+/g," "),
-      rate:+r[5]||1,graph:String(r[6]||""),H:+r[7]||0,I:+r[8]||0,J:+r[9]||0,K:+r[10]||0,S:String(r[18]||"")})}
+      rate:+r[5]||1,graph:String(r[6]||""),H:+r[7]||0,I:+r[8]||0,J:+r[9]||0,K:+r[10]||0,S:String(r[18]||""),etype:etypeOf(tcell)})}
+  if(!month){const RU=["январ","феврал","март","апрел","май","июн","июл","август","сентябр","октябр","ноябр","декабр"];
+    for(const r of rows.slice(0,6))for(const c of r||[]){const m=String(c||"").toLowerCase().match(/табель за ([а-я]+)[.\s]*(\d{4})/);
+      if(m){const i=RU.findIndex(x=>m[1].startsWith(x)||m[1].startsWith(x.slice(0,3)));if(i>=0)month=`${m[2]}-${p2(i+1)}`}}}
   const code=(file.name.match(/(\d+)(?:_\d+)?\.xls[mx]?$/i)||[])[1]||"";
   return{file,name:file.name,code,month,rows:out};
 }
@@ -630,7 +645,7 @@ function openUzImport(){
     if(plan){const ops=plan.ops;try{$("#uz_go").disabled=true;await runBatches(ops,"Yuklanmoqda");toast(`Yuklandi: ${plan.add} yangi, ${plan.upd} yangilandi`);closePanel()}catch(e){$("#uz_go").disabled=false;toast("Xatolik: "+(e.message||e.code))}return}
     try{const parsed=[];for(const f of fs)parsed.push(await readUzasbo(f));
       plan=planImport(parsed,$("#uz_tc").checked);
-      $("#uz_res").innerHTML=`<div class="stat"><div><b>${plan.total}</b>lavozim faylda</div><div><b>${plan.people}</b>xodim</div><div><b>${plan.orin}</b>o'rindosh</div><div><b>${plan.add}</b>yangi</div><div><b>${plan.upd}</b>yangilanadi</div><div><b>${plan.same}</b>o'zgarmagan</div></div>
+      $("#uz_res").innerHTML=`<div class="stat"><div><b>${plan.total}</b>lavozim faylda</div><div><b>${plan.people}</b>xodim</div>${plan.et.asosiy+plan.et.ichki+plan.et.tashqi?`<div><b>${plan.et.asosiy}</b>asosiy</div><div><b>${plan.et.ichki}</b>ichki o'rindosh</div><div><b>${plan.et.tashqi}</b>tashqi o'rindosh</div>`:`<div><b>${plan.orin}</b>o'rindosh</div>`}<div><b>${plan.add}</b>yangi</div><div><b>${plan.upd}</b>yangilanadi</div><div><b>${plan.same}</b>o'zgarmagan</div></div>
        <div class="note">${parsed.map(p=>`${esc(p.name)}: ${p.rows.length} qator${p.month?" ("+MONTHS[+p.month.slice(5)-1]+" "+p.month.slice(0,4)+")":""}`).join("<br>")}</div>
        ${plan.missing.length?`<div class="remind" style="margin-top:10px">Tizimda bor, lekin bu fayllarda yo'q: ${plan.missing.length} ta lavozim (ishdan ketgan bo'lishi mumkin). Ular o'chirilmaydi, kerak bo'lsa qo'lda o'chiring.<ul class="warnlist">${plan.missing.slice(0,50).map(e=>`<li>${esc(e.name)} — ${esc(e.position)}</li>`).join("")}</ul></div>`:""}`;
       $("#uz_go").textContent=plan.ops.length?`Yuklash (${plan.add+plan.upd})`:"O'zgarish yo'q";if(!plan.ops.length)$("#uz_go").disabled=true;
@@ -640,18 +655,22 @@ function openUzImport(){
 function planImport(parsed,tc){
   const ex=new Map(S.emps.filter(e=>e.docId).map(e=>[String(e.docId),e]));const seen=new Map();
   for(const p of parsed)for(const r of p.rows)if(!seen.has(r.docId))seen.set(r.docId,{...r,src:p.code});
+    else if(r.etype&&!seen.get(r.docId).etype)seen.get(r.docId).etype=r.etype;
   const ops=[];let add=0,upd=0,same=0,no=S.emps.filter(e=>e.deptId===POOL).length;
   if(!S.depts.some(d=>d.id===POOL))ops.push({op:"set",col:"departments",id:POOL,data:{name:"Taqsimlanmagan",group:"",head:"",kind:"",order:0}});
   for(const r of seen.values()){
     const g=graphCode(r.graph),rate=r.rate;
     const data={name:tc?titleCase(r.name):r.name,position:r.position,rate,g,tabNo:r.tabNo,docId:r.docId,src:r.src,
       h:g?r2(GRAPHS[g].h*rate):8*rate,sat:g?r2(GRAPHS[g].s*rate):0};
+    if(r.etype)data.etype=r.etype;
+    if(!data.src)delete data.src; // fayl raqami bo'lmasa (masalan .xls), eskisini saqlaymiz
     const old=ex.get(r.docId);
     if(!old){ops.push({op:"set",col:"employees",id:"d"+r.docId,data:{...data,deptId:POOL,no:++no}});add++}
     else if(Object.keys(data).some(k=>String(old[k]??"")!==String(data[k]))){ops.push({op:"update",col:"employees",id:old.id,data});upd++}else same++}
   const names=new Map();for(const r of seen.values()){const k=r.name.toLowerCase();names.set(k,(names.get(k)||0)+1)}
   const missing=S.emps.filter(e=>e.docId&&!seen.has(String(e.docId)));
-  return{ops,add,upd,same,total:seen.size,people:names.size,orin:[...names.values()].filter(n=>n>1).length,missing};
+  const et={asosiy:0,ichki:0,tashqi:0};for(const r of seen.values())if(et[r.etype]!=null)et[r.etype]++;
+  return{ops,add,upd,same,total:seen.size,people:names.size,orin:[...names.values()].filter(n=>n>1).length,missing,et};
 }
 
 /* ---------- UZASBO: faylni to'ldirib qaytarish ---------- */
@@ -685,6 +704,7 @@ function openUzExport(){
     $("#ux_go").disabled=true;
     try{const Z=await loadJSZip();let html="";
       for(const file of fs){
+        if(!/\.xls[mx]$/i.test(file.name))throw new Error(file.name+": bu eski .xls format. To'ldirish uchun UZASBO'dan .xlsm shablonini yuklab oling (.xls faqat xodimlarni yuklashga yaraydi).");
         const p=await readUzasbo(file);if(!p.month)throw new Error(file.name+": oy aniqlanmadi (Дата(месяц) ustuni)");
         const {facts,unappr}=factsFor(p.month);
         const zip=await Z.loadAsync(await file.arrayBuffer(),{createFolders:false});
@@ -808,6 +828,7 @@ function openEmp(id,deptId){
    <label class="full">Lavozim<input type="text" id="e_pos" value="${esc(e.position)}"></label>
    <label>Bo'lim<select id="e_dept" ${U.role==="mudir"?"disabled":""}>${S.depts.map(d=>`<option value="${esc(d.id)}" ${d.id===e.deptId?"selected":""}>${esc(d.name)}</option>`).join("")}</select></label>
    <label>Shtat birligi (stavka)<input type="number" id="e_rate" step="0.25" min="0" value="${e.rate}"></label>
+   <label class="full">Lavozim turi<select id="e_et"><option value="">— belgilanmagan —</option>${Object.entries(ETYPE).map(([k,v])=>`<option value="${k}" ${e.etype===k?"selected":""}>${v}</option>`).join("")}</select></label>
    <label class="full">Ish grafigi<select id="e_g"><option value="36" ${e.g==="36"?"selected":""}>6 kunlik, haftasiga 36 soat (kuniga 6 soat)</option><option value="40" ${e.g==="40"?"selected":""}>6 kunlik, haftasiga 40 soat (Du–Ju 7, Sh 5 soat)</option><option value="" ${!e.g?"selected":""}>Boshqa (soatni qo'lda kiritish)</option></select></label>
    <label class="eh">Kunlik soat (Du–Ju)<input type="number" id="e_h" step="0.5" min="0" value="${e.h}"></label>
    <label class="eh">Shanba soati (0 = dam olish)<input type="number" id="e_sat" step="0.5" min="0" value="${e.sat||0}"></label>
@@ -818,7 +839,7 @@ function openEmp(id,deptId){
   $("#e_save").onclick=async()=>{
     const name=$("#e_name").value.trim().replace(/\s+/g," ");if(!name)return toast("Ismni kiriting");
     const g=$("#e_g").value,rate=parseFloat($("#e_rate").value)||1;
-    const d={name,position:$("#e_pos").value.trim(),deptId:$("#e_dept").value,rate,g,h:g?r2(GRAPHS[g].h*rate):parseFloat($("#e_h").value)||0,sat:g?r2(GRAPHS[g].s*rate):parseFloat($("#e_sat").value)||0};
+    const d={name,position:$("#e_pos").value.trim(),deptId:$("#e_dept").value,rate,g,etype:$("#e_et").value,h:g?r2(GRAPHS[g].h*rate):parseFloat($("#e_h").value)||0,sat:g?r2(GRAPHS[g].s*rate):parseFloat($("#e_sat").value)||0};
     try{
       if(id)await db.collection("employees").doc(id).update(d);
       else{d.no=deptEmps(d.deptId).length+1;await db.collection("employees").add(d)}
@@ -962,8 +983,8 @@ document.addEventListener("click",async ev=>{
   else if(a==="selpage"){(drawXList.part||[]).forEach(e=>SEL.add(e.id));drawXList()}
   else if(a==="selall"){(drawXList.list||[]).forEach(e=>SEL.add(e.id));drawXList()}
   else if(a==="selnone"){SEL.clear();drawXList()}
-  else if(a==="xf_clear"){Object.assign(XF,{page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false});render()}
-  else if(a==="fp_clear"){Object.assign(FP,{page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false});document.querySelectorAll("[id^=fp_]").forEach(x=>{if(x.tagName==="SELECT")x.value="";if(x.type==="checkbox")x.checked=false;if(x.id==="fp_q")x.value=""});drawFP()}
+  else if(a==="xf_clear"){Object.assign(XF,{page:0,q:"",pos:"",g:"",rate:"",src:"",et:"",orin:false});render()}
+  else if(a==="fp_clear"){Object.assign(FP,{page:0,q:"",pos:"",g:"",rate:"",src:"",et:"",orin:false});document.querySelectorAll("[id^=fp_]").forEach(x=>{if(x.tagName==="SELECT")x.value="";if(x.type==="checkbox")x.checked=false;if(x.id==="fp_q")x.value=""});drawFP()}
   else if(a==="xls"){const d=curDept();exportExcel([d],`tabel-${(d.name||"bolim").replace(/[^\wА-Яа-яЎўҚқҒғҲҳ'-]+/g,"_")}-${U.ym}${U.kind==="avans"?"-avans":""}.xlsx`)}
   else if(a==="xlsall"){const ds=S.depts.slice().sort((a,b)=>(a.group||"").localeCompare(b.group||"")||(a.order||0)-(b.order||0)).filter(d=>!isPool(d)&&stOf(d.id).status==="approved");exportExcel(ds,`tabellar-${U.ym}${U.kind==="avans"?"-avans":""}.xlsx`)}
   else if(a==="backup"){
