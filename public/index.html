@@ -96,6 +96,7 @@ table.tab th.fix,table.tab td.fix{position:sticky;left:0;background:var(--paper)
 .frozen{background:var(--st-ok-bg);color:var(--st-ok);border-radius:6px;padding:7px 12px;margin:0 0 10px;font-size:13px}
 #whoami{font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mini{padding:3px 8px;font-size:12px}
+.fbar select{max-width:260px;min-width:0}
 .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:99px;background:var(--accent-soft);color:var(--accent);margin-left:6px;vertical-align:1px;white-space:nowrap}
 .pick{max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:6px}
 .pick label{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
@@ -316,7 +317,12 @@ function calcEmp(emp,upto=dim()){
 const personKey=e=>String(e.name||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu,"");
 const titleCase=s=>String(s).toLowerCase().replace(/(^|[\s-])(\p{L})/gu,(m,a,b)=>a+b.toUpperCase());
 const graphLabel=e=>GRAPHS[e.g]?GRAPHS[e.g].label:`${fmt(+e.h||0)} / ${fmt(+e.sat||0)} soat`;
-function orindosh(e){const k=personKey(e);return S.emps.filter(x=>x.id!==e.id&&personKey(x)===k)}
+// Tez: har xodim kaliti bir marta hisoblanadi, o'rindoshlar soni bitta xaritada
+const pkey=e=>e.__pk||(e.__pk=personKey(e));
+let ORC={src:null,map:null};
+function orMap(){if(ORC.src!==S.emps){const m=new Map();for(const e of S.emps){const k=pkey(e);m.set(k,(m.get(k)||0)+1)}ORC={src:S.emps,map:m}}return ORC.map}
+const orCount=e=>(orMap().get(pkey(e))||1)-1;
+function orindosh(e){if(!orCount(e))return[];const k=pkey(e);return S.emps.filter(x=>x.id!==e.id&&pkey(x)===k)}
 const deptEmps=id=>S.emps.filter(e=>e.deptId===id).sort((a,b)=>(a.no||0)-(b.no||0)||a.name.localeCompare(b.name));
 const tabelKey=(id,k=U.kind)=>`${id}_${U.ym}${k==="avans"?"_avans":""}`;
 const stOf=(id,k=U.kind)=>(S.tabels[tabelKey(id,k)]||{status:"draft"});
@@ -425,7 +431,7 @@ function deptOptions(){
 }
 let LAST_GROUP="";
 const deptGroups=()=>[...new Set(S.depts.map(d=>(d.group||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-document.addEventListener("change",e=>{if(e.target.id==="pk_all"){document.querySelectorAll("#x_rows tr:not([hidden]) .pk").forEach(x=>x.checked=e.target.checked)}
+document.addEventListener("change",e=>{
   if(e.target.id==="nd_group"){const w=$("#nd_gnew_w");if(w){w.hidden=e.target.value!=="__new";if(!w.hidden)$("#nd_gnew").focus()}}});
 const ROLE_LABEL={mudir:"Bo'lim mudiri",kadr:"Kadrlar bo'limi",admin:"Admin",buxg:"Buxgalter"};
 function badge(st){return `<span class="badge b-${st}">${ST_NAME[st]}</span>`}
@@ -455,7 +461,6 @@ function filterHolat(){
   document.querySelectorAll("#h_rows tr").forEach(r=>{r.hidden=!((!q||r.dataset.q.includes(q))&&(!st||r.dataset.st===st))});
 }
 document.addEventListener("input",e=>{if(e.target.id==="h_q"||e.target.id==="h_st")filterHolat();
-  if(e.target.id==="x_q")filterRows(e.target.value);
   if(e.target.id==="d_q"){const q=e.target.value.trim().toLowerCase();document.querySelectorAll("#d_rows tr").forEach(r=>r.hidden=!!q&&!r.dataset.q.includes(q))}});
 function vTabel(v){
   const dept=curDept();if(!dept)return;
@@ -480,37 +485,103 @@ function vTabel(v){
    <div class="legend"><span><span class="sw" style="background:var(--wk)"></span>Dam olish / bayram</span><span><span class="sw" style="background:var(--c-sick)"></span>Kasallik</span><span><span class="sw" style="background:var(--c-leave)"></span>Ta'til</span><span><span class="sw" style="background:var(--c-trip)"></span>Xizmat safari</span><span><span class="sw" style="box-shadow:inset 0 0 0 2px var(--accent)"></span>Qo'lda kiritilgan</span></div>`;
 }
 
+/* ---------- Xodimlar ro'yxati: filtr + 100 talik sahifalar ---------- */
+const PAGE=100;
+const XF={dept:"",page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false};
+const SEL=new Set();
+const eq=e=>e.__q||(e.__q=(e.name+" "+e.position+" "+(e.tabNo||"")).toLowerCase());
+function applyFilters(list,F){const q=F.q.trim().toLowerCase();
+  return list.filter(e=>(!q||eq(e).includes(q))&&(!F.pos||e.position===F.pos)&&(!F.g||(F.g==="x"?!GRAPHS[e.g]:e.g===F.g))
+    &&(!F.rate||String(+(e.rate||1))===F.rate)&&(!F.src||String(e.src||"")===F.src)&&(!F.orin||orCount(e)>0))}
+function optsOf(list,key,label){const m=new Map();for(const e of list){const k=key(e);if(k!=="")m.set(k,(m.get(k)||0)+1)}
+  return[...m.entries()].sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0]))).map(([k,n])=>`<option value="${esc(k)}">${esc(label?label(k):k)} (${n})</option>`).join("")}
+function filterBar(list,F,pfx){
+  const sel=(id,first,opts,val)=>`<select id="${pfx}_${id}">${`<option value="">${first}</option>`+opts}</select>`.replace(`value="${esc(val)}"`,`value="${esc(val)}" selected`);
+  return `<div class="row fbar" style="margin-bottom:10px">
+    <input type="text" id="${pfx}_q" value="${esc(F.q)}" placeholder="F.I.Sh., lavozim yoki tab. raqam" style="min-width:220px;flex:1 1 220px">
+    ${sel("pos","Hamma lavozim",optsOf(list,e=>e.position),F.pos)}
+    ${sel("g","Hamma grafik",optsOf(list,e=>GRAPHS[e.g]?e.g:"x",k=>k==="x"?"Boshqa":GRAPHS[k].label),F.g)}
+    ${sel("rate","Hamma stavka",optsOf(list,e=>String(+(e.rate||1)),k=>k+" stavka"),F.rate)}
+    ${list.some(e=>e.src)?sel("src","Hamma fayl",optsOf(list,e=>String(e.src||""),k=>"Fayl "+k),F.src):""}
+    <label class="note" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="${pfx}_orin" ${F.orin?"checked":""}> faqat o'rindoshlar</label>
+    <button class="btn mini" data-act="${pfx}_clear">Tozalash</button></div>`;
+}
+function pagerHtml(total,page,start,shown){
+  const pages=Math.max(1,Math.ceil(total/PAGE));if(pages<2)return `<span class="note">${total} ta</span>`;
+  const b=(p,t,dis,cur)=>`<button class="btn mini" data-pg="${p}" ${dis?"disabled":""} ${cur?'aria-current="page" style="background:var(--accent);color:var(--accent-ink);border-color:var(--accent)"':""}>${t}</button>`;
+  let nums=[];for(let p=0;p<pages;p++)if(p<2||p>pages-3||Math.abs(p-page)<=2)nums.push(p);
+  let out=[],last=-1;for(const p of nums){if(p-last>1)out.push(`<span class="note">…</span>`);out.push(b(p,p+1,false,p===page));last=p}
+  return `<span class="note">${start+1}–${start+shown} / ${total}</span><div class="grow"></div>${b(page-1,"‹ Oldingi",page===0)}${out.join("")}${b(page+1,"Keyingi ›",page>=pages-1)}`;
+}
 function vXodim(v){
   const d=curDept();if(!d)return;
-  const es=deptEmps(d.id),pool=isPool(d),canAdmin=U.role==="kadr"||U.role==="admin";
-  const poolN=S.emps.filter(e=>e.deptId===POOL).length;
-  const row=(e,i)=>{const o=orindosh(e).length;return `<tr data-q="${esc((e.name+" "+e.position+" "+(e.tabNo||"")).toLowerCase())}">${pool?`<td><input type="checkbox" class="pk" value="${esc(e.id)}" aria-label="Tanlash"></td>`:""}<td class="num">${i+1}</td><td>${esc(e.name)}${o?`<span class="tag" title="${o+1} ta lavozimda ishlaydi">o'rindosh</span>`:""}</td><td>${esc(e.position)}</td><td class="num">${fmt(e.rate||1)}</td><td class="note">${esc(graphLabel(e))}</td><td class="num note">${esc(e.tabNo||"")}</td>
-    <td><div class="row" style="gap:4px;flex-wrap:nowrap;justify-content:flex-end">${pool?"":`<button class="btn mini" data-mv="${esc(e.id)}" data-dir="-1" ${i?"":"disabled"} aria-label="Yuqoriga">↑</button><button class="btn mini" data-mv="${esc(e.id)}" data-dir="1" ${i<es.length-1?"":"disabled"} aria-label="Pastga">↓</button>`}<button class="btn mini" data-emp-edit="${esc(e.id)}">Tahrirlash</button><button class="btn mini dng" data-edel="${esc(e.id)}" title="Xodimni o'chirish">O'chirish</button></div></td></tr>`};
-  const head=pool
-    ?`<div class="remind">Bu ro'yxat UZASBO'dan yuklangan, hali bo'limga biriktirilmagan xodimlar. Belgilab, pastdan bo'limni tanlang va «Biriktirish» ni bosing. Mudirlar ham o'z bo'limidan «Taqsimlanmaganlardan qo'shish» orqali tanlay oladi.</div>
-     <div class="row" style="margin-bottom:10px"><input type="text" id="x_q" placeholder="F.I.Sh., lavozim yoki tab. raqam" style="min-width:260px"><label class="note"><input type="checkbox" id="pk_all"> ko'ringanlarni belgilash</label><div class="grow"></div>
-     <select id="pk_dept"><option value="">— Bo'limni tanlang —</option>${S.depts.filter(x=>!isPool(x)).map(x=>`<option value="${esc(x.id)}">${esc((x.group?x.group+" · ":"")+x.name)}</option>`).join("")}</select><button class="btn pri" data-act="assign">Biriktirish</button></div>`
-    :`<div class="row" style="margin-bottom:10px"><input type="text" id="x_q" placeholder="Qidirish: F.I.Sh., lavozim" style="min-width:240px"></div>`;
-  v.innerHTML=`<div class="card scroll" style="margin-bottom:14px"><div class="strip" style="margin-bottom:6px"><h2 style="font-size:15px">${esc(d.name)}</h2><span class="note">${es.length} lavozim · ${new Set(es.map(personKey)).size} xodim</span><div class="grow"></div>
+  if(XF.dept!==d.id){Object.assign(XF,{dept:d.id,page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false});SEL.clear()}
+  const all=deptEmps(d.id),pool=isPool(d),canAdmin=U.role==="kadr"||U.role==="admin";
+  const poolN=pool?all.length:S.emps.filter(e=>e.deptId===POOL).length;
+  v.innerHTML=`<div class="card" style="margin-bottom:14px"><div class="strip" style="margin-bottom:6px"><h2 style="font-size:15px">${esc(d.name)}</h2><span class="note">${all.length} lavozim · ${new Set(all.map(pkey)).size} xodim</span><div class="grow"></div>
      ${canAdmin?`<button class="btn" data-act="uzimport">UZASBO'dan yuklash</button>`:""}
      ${!pool&&poolN?`<button class="btn" data-act="frompool">Taqsimlanmaganlardan qo'shish (${poolN})</button>`:""}
      ${pool?"":`<button class="btn" data-emp-bulk="${esc(d.id)}">Excel'dan qo'yish</button><button class="btn" data-emp-new="${esc(d.id)}">+ Xodim qo'shish</button>`}</div>
-     ${head}
-     <table class="list"><thead><tr>${pool?"<th></th>":""}<th>№</th><th>F.I.Sh.</th><th>Lavozim</th><th>Stavka</th><th>Grafik</th><th>Tab.№</th><th></th></tr></thead><tbody id="x_rows">${es.map(row).join("")||`<tr><td colspan="8" class="note">Xodim yo'q</td></tr>`}</tbody></table></div>`;
+     ${pool?`<div class="remind">Bu ro'yxat UZASBO'dan yuklangan, hali bo'limga biriktirilmagan xodimlar. Filtrlab belgilang, bo'limni tanlang va «Biriktirish» ni bosing. Belgilashlar sahifadan sahifaga o'tganda saqlanadi.</div>`:""}
+     ${filterBar(all,XF,"xf")}
+     ${pool?`<div class="row" style="margin-bottom:10px;padding:8px 10px;background:var(--bg);border-radius:6px">
+       <b id="sel_n">Tanlangan: ${SEL.size}</b>
+       <button class="btn mini" data-act="selpage">Sahifadagilarni belgilash</button>
+       <button class="btn mini" data-act="selall" id="selall_b">Filtrdagi hammasini belgilash</button>
+       <button class="btn mini" data-act="selnone">Bekor qilish</button><div class="grow"></div>
+       <select id="pk_dept"><option value="">— Bo'limni tanlang —</option>${S.depts.filter(x=>!isPool(x)).map(x=>`<option value="${esc(x.id)}">${esc((x.group?x.group+" · ":"")+x.name)}</option>`).join("")}</select><button class="btn pri" data-act="assign">Biriktirish</button></div>`:""}
+     <div class="scroll"><table class="list"><thead><tr>${pool?"<th></th>":""}<th>№</th><th>F.I.Sh.</th><th>Lavozim</th><th>Stavka</th><th>Grafik</th><th>Tab.№</th><th></th></tr></thead><tbody id="x_rows"></tbody></table></div>
+     <div class="row" id="x_pager" style="margin-top:10px"></div></div>`;
+  drawXList();
 }
-function filterRows(q){q=q.trim().toLowerCase();document.querySelectorAll("#x_rows tr[data-q]").forEach(r=>r.hidden=!!q&&!r.dataset.q.includes(q))}
+function drawXList(){
+  const d=curDept();if(!d||!$("#x_rows"))return;
+  const pool=isPool(d),all=deptEmps(d.id);
+  const list=pool?applyFilters(all,XF).sort((a,b)=>a.name.localeCompare(b.name)):applyFilters(all,XF);
+  const pages=Math.max(1,Math.ceil(list.length/PAGE));if(XF.page>=pages)XF.page=pages-1;if(XF.page<0)XF.page=0;
+  const start=XF.page*PAGE,part=list.slice(start,start+PAGE),filtered=list.length!==all.length,idx=new Map(all.map((e,i)=>[e.id,i]));
+  $("#x_rows").innerHTML=part.map((e,k)=>{const i=idx.get(e.id),o=orCount(e);
+    return `<tr>${pool?`<td><input type="checkbox" class="pk" value="${esc(e.id)}" ${SEL.has(e.id)?"checked":""} aria-label="Tanlash"></td>`:""}<td class="num">${pool?start+k+1:i+1}</td><td>${esc(e.name)}${o?`<span class="tag" title="${o+1} ta lavozimda ishlaydi">o'rindosh</span>`:""}</td><td>${esc(e.position)}</td><td class="num">${fmt(e.rate||1)}</td><td class="note">${esc(graphLabel(e))}</td><td class="num note">${esc(e.tabNo||"")}</td>
+    <td><div class="row" style="gap:4px;flex-wrap:nowrap;justify-content:flex-end">${pool?"":`<button class="btn mini" data-mv="${esc(e.id)}" data-dir="-1" ${i&&!filtered?"":"disabled"} aria-label="Yuqoriga">↑</button><button class="btn mini" data-mv="${esc(e.id)}" data-dir="1" ${i<all.length-1&&!filtered?"":"disabled"} aria-label="Pastga">↓</button>`}<button class="btn mini" data-emp-edit="${esc(e.id)}">Tahrirlash</button><button class="btn mini dng" data-edel="${esc(e.id)}" title="Xodimni o'chirish">O'chirish</button></div></td></tr>`}).join("")
+    ||`<tr><td colspan="8" class="note">${all.length?"Filtr bo'yicha hech kim topilmadi":"Xodim yo'q"}</td></tr>`;
+  $("#x_pager").innerHTML=pagerHtml(list.length,XF.page,start,part.length);
+  const sb=$("#selall_b");if(sb)sb.textContent=`Filtrdagi hammasini belgilash (${list.length})`;
+  const sn=$("#sel_n");if(sn)sn.textContent="Tanlangan: "+SEL.size;
+  drawXList.list=list;drawXList.part=part;
+}
+let xqT=null;
+document.addEventListener("input",e=>{const id=e.target.id;
+  if(id==="xf_q"){clearTimeout(xqT);xqT=setTimeout(()=>{XF.q=e.target.value;XF.page=0;drawXList()},160)}
+  if(id==="fp_q"){clearTimeout(xqT);xqT=setTimeout(()=>{FP.q=e.target.value;FP.page=0;drawFP()},160)}});
+document.addEventListener("change",e=>{const t=e.target,id=t.id;
+  const m=id.match(/^(xf|fp)_(pos|g|rate|src|orin)$/);
+  if(m){const F=m[1]==="xf"?XF:FP;F[m[2]]=m[2]==="orin"?t.checked:t.value;F.page=0;m[1]==="xf"?drawXList():drawFP()}
+  if(t.classList.contains("pk")){t.checked?SEL.add(t.value):SEL.delete(t.value);const sn=$("#sel_n");if(sn)sn.textContent="Tanlangan: "+SEL.size}
+  if(t.classList.contains("fpk")){t.checked?FPSEL.add(t.value):FPSEL.delete(t.value);const n=$("#fp_n");if(n)n.textContent=FPSEL.size+" ta tanlandi"}});
 
 /* ---------- Taqsimlanmaganlardan biriktirish (mudir va kadrlar) ---------- */
+const FP={page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false};
+const FPSEL=new Set();
 function openFromPool(){
-  const d=curDept(),list=S.emps.filter(e=>e.deptId===POOL).sort((a,b)=>a.name.localeCompare(b.name));
-  openPanel(`<h3>Taqsimlanmaganlardan qo'shish</h3><div class="note">«${esc(d.name)}» bo'limiga o'tkaziladigan xodimlarni belgilang. O'rindoshlar har lavozimi alohida ko'rinadi.</div>
-   <div class="row" style="margin:12px 0 8px"><input type="text" id="fp_q" placeholder="F.I.Sh., lavozim yoki tab. raqam" style="flex:1;min-width:0"></div>
-   <div class="pick" id="fp_list">${list.map(e=>`<label data-q="${esc((e.name+" "+e.position+" "+(e.tabNo||"")).toLowerCase())}"><input type="checkbox" value="${esc(e.id)}"><span><b>${esc(e.name)}</b><small>${esc(e.position)} · stavka ${fmt(e.rate||1)} · ${esc(graphLabel(e))}${e.tabNo?" · tab.№ "+esc(e.tabNo):""}</small></span></label>`).join("")}</div>
-   <div class="row" style="margin-top:12px"><button class="btn pri" id="fp_ok">Bo'limga qo'shish</button><button class="btn" data-close>Yopish</button><span class="note" id="fp_n"></span></div>`);
-  const cnt=()=>$("#fp_n").textContent=document.querySelectorAll("#fp_list input:checked").length+" ta tanlandi";
-  $("#fp_q").oninput=e=>{const q=e.target.value.trim().toLowerCase();document.querySelectorAll("#fp_list label").forEach(l=>l.hidden=!!q&&!l.dataset.q.includes(q))};
-  $("#fp_list").onchange=cnt;cnt();
-  $("#fp_ok").onclick=()=>moveEmps([...document.querySelectorAll("#fp_list input:checked")].map(x=>x.value),d.id,true);
+  const d=curDept();Object.assign(FP,{page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false});FPSEL.clear();
+  const all=S.emps.filter(e=>e.deptId===POOL);
+  openPanel(`<h3>Taqsimlanmaganlardan qo'shish</h3><div class="note">«${esc(d.name)}» bo'limiga o'tkaziladigan lavozimlarni belgilang. Belgilashlar sahifalar orasida saqlanadi.</div>
+   <div style="margin:12px 0 0">${filterBar(all,FP,"fp")}</div>
+   <div class="pick" id="fp_list"></div>
+   <div class="row" id="fp_pager" style="margin-top:8px"></div>
+   <div class="row" style="margin-top:12px"><button class="btn pri" id="fp_ok">Bo'limga qo'shish</button><button class="btn" data-close>Yopish</button><span class="note" id="fp_n">0 ta tanlandi</span></div>`);
+  $("#sheet").style.width="min(760px,100%)";
+  drawFP();
+  $("#fp_ok").onclick=()=>moveEmps([...FPSEL],d.id,true);
+}
+function drawFP(){
+  if(!$("#fp_list"))return;
+  const list=applyFilters(S.emps.filter(e=>e.deptId===POOL),FP).sort((a,b)=>a.name.localeCompare(b.name));
+  const pages=Math.max(1,Math.ceil(list.length/PAGE));if(FP.page>=pages)FP.page=pages-1;if(FP.page<0)FP.page=0;
+  const start=FP.page*PAGE,part=list.slice(start,start+PAGE);
+  $("#fp_list").innerHTML=part.map(e=>`<label><input type="checkbox" class="fpk" value="${esc(e.id)}" ${FPSEL.has(e.id)?"checked":""}><span><b>${esc(e.name)}</b>${orCount(e)?`<span class="tag">o'rindosh</span>`:""}<small>${esc(e.position)} · stavka ${fmt(e.rate||1)} · ${esc(graphLabel(e))}${e.tabNo?" · tab.№ "+esc(e.tabNo):""}</small></span></label>`).join("")||`<div class="note" style="padding:12px">Hech kim topilmadi</div>`;
+  $("#fp_pager").innerHTML=pagerHtml(list.length,FP.page,start,part.length).replace(/data-pg=/g,"data-fpg=");
+  $("#fp_n").textContent=FPSEL.size+" ta tanlandi";
 }
 async function moveEmps(ids,deptId,close){
   if(!ids.length)return toast("Hech kim tanlanmagan");
@@ -846,6 +917,8 @@ document.addEventListener("click",async ev=>{
   if(t.dataset.mv){const e=S.emps.find(x=>x.id===t.dataset.mv);if(!e)return;const es=deptEmps(e.deptId),i=es.indexOf(e),j=i+(+t.dataset.dir);if(j<0||j>=es.length)return;
     [es[i],es[j]]=[es[j],es[i]];const ops=es.map((x,k)=>({x,k})).filter(({x,k})=>x.no!==k+1).map(({x,k})=>({op:"update",col:"employees",id:x.id,data:{no:k+1}}));
     try{if(db.batch)await db.batch(ops);else for(const o of ops)await db.collection("employees").doc(o.id).update(o.data)}catch(er){toast("Xatolik: "+(er.message||er.code))}return}
+  if(t.dataset.pg!=null){XF.page=+t.dataset.pg;drawXList();const tb=$("#x_rows");if(tb)tb.closest(".card").scrollIntoView({block:"start"});return}
+  if(t.dataset.fpg!=null){FP.page=+t.dataset.fpg;drawFP();$("#fp_list").scrollTop=0;return}
   if(t.dataset.edel){const e=S.emps.find(x=>x.id===t.dataset.edel);if(!e)return;
     if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Rostdanmi?";t.title=e.name+" o'chirilsinmi? Yana bir marta bosing.";setTimeout(()=>{if(t.isConnected){t.dataset.sure="";t.textContent="O'chirish"}},4000);return}
     try{await db.collection("employees").doc(e.id).delete();toast(e.name+" o'chirildi")}catch(er){toast("Xatolik: "+(er.message||er.code))}return}
@@ -885,7 +958,12 @@ document.addEventListener("click",async ev=>{
   else if(a==="uzimport")openUzImport();
   else if(a==="uzexport")openUzExport();
   else if(a==="frompool")openFromPool();
-  else if(a==="assign"){const dep=$("#pk_dept").value;if(!dep)return toast("Bo'limni tanlang");moveEmps([...document.querySelectorAll("#x_rows .pk:checked")].map(x=>x.value),dep)}
+  else if(a==="assign"){const dep=$("#pk_dept").value;if(!dep)return toast("Bo'limni tanlang");const ids=[...SEL];await moveEmps(ids,dep);SEL.clear();drawXList()}
+  else if(a==="selpage"){(drawXList.part||[]).forEach(e=>SEL.add(e.id));drawXList()}
+  else if(a==="selall"){(drawXList.list||[]).forEach(e=>SEL.add(e.id));drawXList()}
+  else if(a==="selnone"){SEL.clear();drawXList()}
+  else if(a==="xf_clear"){Object.assign(XF,{page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false});render()}
+  else if(a==="fp_clear"){Object.assign(FP,{page:0,q:"",pos:"",g:"",rate:"",src:"",orin:false});document.querySelectorAll("[id^=fp_]").forEach(x=>{if(x.tagName==="SELECT")x.value="";if(x.type==="checkbox")x.checked=false;if(x.id==="fp_q")x.value=""});drawFP()}
   else if(a==="xls"){const d=curDept();exportExcel([d],`tabel-${(d.name||"bolim").replace(/[^\wА-Яа-яЎўҚқҒғҲҳ'-]+/g,"_")}-${U.ym}${U.kind==="avans"?"-avans":""}.xlsx`)}
   else if(a==="xlsall"){const ds=S.depts.slice().sort((a,b)=>(a.group||"").localeCompare(b.group||"")||(a.order||0)-(b.order||0)).filter(d=>!isPool(d)&&stOf(d.id).status==="approved");exportExcel(ds,`tabellar-${U.ym}${U.kind==="avans"?"-avans":""}.xlsx`)}
   else if(a==="backup"){
