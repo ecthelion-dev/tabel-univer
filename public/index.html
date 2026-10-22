@@ -97,6 +97,10 @@ table.tab th.fix,table.tab td.fix{position:sticky;left:0;background:var(--paper)
 #whoami{font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mini{padding:3px 8px;font-size:12px}
 .fbar select{max-width:260px;min-width:0}
+.chips{gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:5px 12px;cursor:pointer;font:inherit;font-size:13px;color:var(--ink)}
+.chip span{color:var(--muted);font-size:12px;margin-left:2px;font-variant-numeric:tabular-nums}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}.chip[aria-pressed=true] span{color:var(--accent-ink);opacity:.85}
 .tag0{background:var(--bg);color:var(--muted)}.tag2{background:var(--st-sub-bg);color:var(--st-sub)}
 .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:99px;background:var(--accent-soft);color:var(--accent);margin-left:6px;vertical-align:1px;white-space:nowrap}
 .pick{max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:6px}
@@ -505,14 +509,18 @@ function applyFilters(list,F){const q=F.q.trim().toLowerCase();
     &&(!F.rate||String(+(e.rate||1))===F.rate)&&(!F.et||(F.et==="none"?!e.etype:e.etype===F.et))&&(!F.src||String(e.src||"")===F.src)&&(!F.orin||orCount(e)>0))}
 function optsOf(list,key,label){const m=new Map();for(const e of list){const k=key(e);if(k!=="")m.set(k,(m.get(k)||0)+1)}
   return[...m.entries()].sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0]))).map(([k,n])=>`<option value="${esc(k)}">${esc(label?label(k):k)} (${n})</option>`).join("")}
+function etChips(list,F,pfx){
+  const c={asosiy:0,ichki:0,tashqi:0,none:0};for(const e of list)c[e.etype||"none"]++;
+  const b=(k,t,n)=>`<button class="chip" data-et="${k}" data-pfx="${pfx}" aria-pressed="${F.et===k}">${t}${n!=null?` <span>${n}</span>`:""}</button>`;
+  return b("","Hammasi",list.length)+b("asosiy","Asosiy",c.asosiy)+b("ichki","Ichki o'rindosh",c.ichki)+b("tashqi","Tashqi o'rindosh",c.tashqi)+(c.none?b("none","Turi belgilanmagan",c.none):"");
+}
 function filterBar(list,F,pfx){
   const sel=(id,first,opts,val)=>`<select id="${pfx}_${id}">${`<option value="">${first}</option>`+opts}</select>`.replace(`value="${esc(val)}"`,`value="${esc(val)}" selected`);
-  return `<div class="row fbar" style="margin-bottom:10px">
+  return `<div class="row chips" id="${pfx}_chips" role="group" aria-label="Lavozim turi" style="margin-bottom:8px">${etChips(list,F,pfx)}</div><div class="row fbar" style="margin-bottom:10px">
     <input type="text" id="${pfx}_q" value="${esc(F.q)}" placeholder="F.I.Sh., lavozim yoki tab. raqam" style="min-width:220px;flex:1 1 220px">
     ${sel("pos","Hamma lavozim",optsOf(list,e=>e.position),F.pos)}
     ${sel("g","Hamma grafik",optsOf(list,e=>GRAPHS[e.g]?e.g:"x",k=>k==="x"?"Boshqa":GRAPHS[k].label),F.g)}
     ${sel("rate","Hamma stavka",optsOf(list,e=>String(+(e.rate||1)),k=>k+" stavka"),F.rate)}
-    ${list.some(e=>e.etype)?sel("et","Hamma turi",optsOf(list,e=>e.etype||"none",k=>ETYPE[k]||"Turi belgilanmagan"),F.et):""}
     ${list.some(e=>e.src)?sel("src","Hamma fayl",optsOf(list,e=>String(e.src||""),k=>"Fayl "+k),F.src):""}
     <label class="note" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="${pfx}_orin" ${F.orin?"checked":""}> faqat o'rindoshlar</label>
     <button class="btn mini" data-act="${pfx}_clear">Tozalash</button></div>`;
@@ -938,6 +946,9 @@ document.addEventListener("click",async ev=>{
   if(t.dataset.mv){const e=S.emps.find(x=>x.id===t.dataset.mv);if(!e)return;const es=deptEmps(e.deptId),i=es.indexOf(e),j=i+(+t.dataset.dir);if(j<0||j>=es.length)return;
     [es[i],es[j]]=[es[j],es[i]];const ops=es.map((x,k)=>({x,k})).filter(({x,k})=>x.no!==k+1).map(({x,k})=>({op:"update",col:"employees",id:x.id,data:{no:k+1}}));
     try{if(db.batch)await db.batch(ops);else for(const o of ops)await db.collection("employees").doc(o.id).update(o.data)}catch(er){toast("Xatolik: "+(er.message||er.code))}return}
+  if(t.dataset.et!=null&&t.dataset.pfx){const F=t.dataset.pfx==="xf"?XF:FP;F.et=t.dataset.et;F.page=0;
+    document.querySelectorAll(`#${t.dataset.pfx}_chips .chip`).forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.et===F.et)));
+    t.dataset.pfx==="xf"?drawXList():drawFP();return}
   if(t.dataset.pg!=null){XF.page=+t.dataset.pg;drawXList();const tb=$("#x_rows");if(tb)tb.closest(".card").scrollIntoView({block:"start"});return}
   if(t.dataset.fpg!=null){FP.page=+t.dataset.fpg;drawFP();$("#fp_list").scrollTop=0;return}
   if(t.dataset.edel){const e=S.emps.find(x=>x.id===t.dataset.edel);if(!e)return;
@@ -984,7 +995,7 @@ document.addEventListener("click",async ev=>{
   else if(a==="selall"){(drawXList.list||[]).forEach(e=>SEL.add(e.id));drawXList()}
   else if(a==="selnone"){SEL.clear();drawXList()}
   else if(a==="xf_clear"){Object.assign(XF,{page:0,q:"",pos:"",g:"",rate:"",src:"",et:"",orin:false});render()}
-  else if(a==="fp_clear"){Object.assign(FP,{page:0,q:"",pos:"",g:"",rate:"",src:"",et:"",orin:false});document.querySelectorAll("[id^=fp_]").forEach(x=>{if(x.tagName==="SELECT")x.value="";if(x.type==="checkbox")x.checked=false;if(x.id==="fp_q")x.value=""});drawFP()}
+  else if(a==="fp_clear"){Object.assign(FP,{page:0,q:"",pos:"",g:"",rate:"",src:"",et:"",orin:false});document.querySelectorAll("[id^=fp_]").forEach(x=>{if(x.tagName==="SELECT")x.value="";if(x.type==="checkbox")x.checked=false;if(x.id==="fp_q")x.value=""});document.querySelectorAll("#fp_chips .chip").forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.et==="")));drawFP()}
   else if(a==="xls"){const d=curDept();exportExcel([d],`tabel-${(d.name||"bolim").replace(/[^\wА-Яа-яЎўҚқҒғҲҳ'-]+/g,"_")}-${U.ym}${U.kind==="avans"?"-avans":""}.xlsx`)}
   else if(a==="xlsall"){const ds=S.depts.slice().sort((a,b)=>(a.group||"").localeCompare(b.group||"")||(a.order||0)-(b.order||0)).filter(d=>!isPool(d)&&stOf(d.id).status==="approved");exportExcel(ds,`tabellar-${U.ym}${U.kind==="avans"?"-avans":""}.xlsx`)}
   else if(a==="backup"){
