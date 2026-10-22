@@ -25,19 +25,24 @@ netlify deploy --prod
 ## Muhit o'zgaruvchilari (Site settings, Environment variables)
 | Nomi | Nima uchun |
 |---|---|
-| `ADMIN_PASS` | Admin paroli (majburiy) |
-| `KADR_PASS` | Kadrlar bo'limi paroli |
-| `BUXG_PASS` | Buxgalter paroli |
+| `ADMIN_PASS` | Asosiy «admin» hisobining paroli (majburiy, kamida 12 belgi) |
 | `SECRET` | Sessiya kaliti, uzun tasodifiy matn (tavsiya) |
 | `NO_SEED` | `1` qo'ysangiz namuna ma'lumotlar yuklanmaydi (birinchi deployda qo'ying) |
 
 O'zgaruvchilarni kiritgach saytni qayta deploy qiling.
 
 ## Birinchi ishga tushirish
-1. Saytni oching, Admin sifatida kiring.
-2. Sozlamalar: muassasa nomi, rektor, prorektor, tabel tuzuvchi, bayram kunlarini kiriting.
-3. Bo'limlar va xodimlarni qo'shing (ro'yxatdan qo'yish mumkin).
-4. Sozlamalarda "Parollarni yaratish" tugmasini bosing va har bo'lim mudiriga o'z parolini bering.
+1. Saytni oching, login **admin**, parol — Netlify'dagi `ADMIN_PASS`.
+2. **Sozlamalar**: muassasa nomi, rektor, prorektor, tabel tuzuvchi, bayram kunlari.
+3. Bo'limlarni qo'shing, xodimlarni UZASBO fayllaridan yuklang.
+4. **Foydalanuvchilar**: kadrlar bo'limi va buxgalteriya xodimlariga «+ Foydalanuvchi» bilan hisob oching; «Mudirlar uchun hisob yaratish» hisobi yo'q har bir bo'limga mudir hisobini birdan yaratadi. Parollar faqat yaratilganda ko'rinadi — nusxalab egasiga bering.
+
+## Kirish (login va parol)
+- Har bir foydalanuvchining o'z logini va paroli bor; rol (admin, kadrlar, buxgalteriya, bo'lim mudiri) va bo'lim hisobga biriktiriladi.
+- Parollar serverda scrypt bilan xeshlanib saqlanadi, hech qayerda ochiq ko'rinmaydi.
+- Har kim o'z parolini tepadagi «Parol» tugmasi bilan o'zgartiradi. Admin parolni tiklashi, hisobni bloklashi yoki o'chirishi mumkin; bunda o'sha foydalanuvchining ochiq sessiyalari darhol yopiladi.
+- Asosiy «admin» hisobi paroli faqat Netlify'dagi `ADMIN_PASS` orqali o'zgaradi (unutilsa ham tiklash yo'li shu).
+- Eski `KADR_PASS`, `BUXG_PASS` o'zgaruvchilari endi ishlatilmaydi — Netlify'dan o'chirib qo'yishingiz mumkin.
 
 ## Imkoniyatlar
 - **UZASBO bilan ishlash:**
@@ -55,7 +60,7 @@ O'zgaruvchilarni kiritgach saytni qayta deploy qiling.
 - **Zaxira:** Sozlamalar → "Zaxirani yuklab olish" (JSON). Har oy oxirida yuklab, saqlab qo'ying. "Tiklash" hamma ma'lumotni fayldagisi bilan almashtiradi.
 - **Eslatma:** oy tugashiga 5 kun qolganda va oy o'tib ketganda topshirilmagan tabellar haqida ogohlantiradi.
 - **Bir vaqtda saqlash:** ikki kishi bir lahzada saqlasa, server qayta urinadi va hech biri yo'qolmaydi.
-- **Login himoyasi:** bir manzildan 8 marta noto'g'ri paroldan keyin 15 daqiqa bloklanadi. Kirishda ism so'raladi (jurnal uchun).
+- **Login himoyasi:** bir manzildan 8 marta noto'g'ri urinishdan keyin 15 daqiqa bloklanadi.
 
 ## Huquqlar (serverda tekshiriladi)
 - **Bo'lim mudiri:** faqat o'z bo'limi. O'z bo'limiga xodim (o'qituvchi) qo'shadi, tahrirlaydi, o'chiradi, lekin boshqa bo'limga o'tkaza olmaydi. Istisno kiritadi, tabelni tasdiqqa yuboradi. Yuborilgach kadrlar qaytarmaguncha kunlarni o'zgartira olmaydi. Hamma o'zgarish jurnalga yoziladi.

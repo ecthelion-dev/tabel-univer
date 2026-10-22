@@ -161,21 +161,15 @@ table.tab th.fix,table.tab td.fix{position:sticky;left:0;background:var(--paper)
   <main id="view"></main>
 </div>
 <div id="panel" role="dialog" aria-modal="true"><div class="sheet" id="sheet"></div></div>
-<div id="login" hidden style="position:fixed;inset:0;z-index:40;background:var(--bg);display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:max(24px,6vh) 16px 24px">
+<div id="login" hidden style="position:fixed;inset:0;z-index:40;background:var(--bg);display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:max(24px,10vh) 16px 24px">
   <form class="card login" id="loginForm" novalidate>
     <h2>Tabel tizimiga kirish</h2>
-    <p class="note" style="margin:2px 0 0">Ish vaqti hisobi: bo'limlar tabelni to'ldiradi, kadrlar bo'limi tasdiqlaydi.</p>
-    <fieldset class="roles"><legend>1. Siz kimsiz?</legend>
-      <label class="rc"><input type="radio" name="l_role" value="mudir" checked><b>Bo'lim / kafedra mudiri</b><span>O'z bo'limi tabelini to'ldiradi va topshiradi</span></label>
-      <label class="rc"><input type="radio" name="l_role" value="kadr"><b>Kadrlar bo'limi</b><span>Tabellarni tekshiradi va tasdiqlaydi</span></label>
-      <label class="rc"><input type="radio" name="l_role" value="buxg"><b>Buxgalteriya</b><span>Tasdiqlangan tabellarni ko'radi va yuklab oladi</span></label>
-      <label class="rc"><input type="radio" name="l_role" value="admin"><b>Administrator</b><span>Bo'limlar, sozlamalar va parollar</span></label>
-    </fieldset>
-    <div class="lf" id="l_deptw"><label for="l_dept">2. Bo'limingiz (kafedrangiz)</label><select id="l_dept"></select><small>Bo'limingiz ro'yxatda bo'lmasa, administratorga murojaat qiling.</small></div>
-    <div class="lf"><label for="l_name"><span class="lnum">3.</span> Ismingiz (F.I.Sh.)</label><input type="text" id="l_name" autocomplete="name" placeholder="Masalan: Karimov Aziz"><small>Jurnalda kim nimani o'zgartirgani shu ism bilan ko'rinadi.</small></div>
-    <div class="lf"><label for="l_pass"><span class="lnum">4.</span> Parol</label><div class="pw"><input type="password" id="l_pass" autocomplete="current-password"><button type="button" class="btn" id="l_eye" aria-label="Parolni ko'rsatish">Ko'rsatish</button></div><small id="l_passhint"></small></div>
+    <p class="note" style="margin:2px 0 0" id="loginInst">Login va parolni administrator beradi.</p>
+    <div class="lf"><label for="l_login">Login</label><input type="text" id="l_login" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Masalan: kadr.ali"></div>
+    <div class="lf"><label for="l_pass">Parol</label><div class="pw"><input type="password" id="l_pass" autocomplete="current-password"><button type="button" class="btn" id="l_eye" aria-label="Parolni ko'rsatish">Ko'rsatish</button></div></div>
     <div id="l_err" role="alert"></div>
     <button class="btn pri" type="submit" id="l_go">Kirish</button>
+    <p class="note" style="margin:0">Parolni unutgan bo'lsangiz, administratorga murojaat qiling.</p>
   </form></div>
 <div id="toast" role="status"></div>
 
@@ -205,12 +199,14 @@ function makeDb(){
   const colRef=c=>({doc:id=>docRef(c,id||uid()),add:async d=>{const id=uid();await write([{op:"set",col:c,id,data:d}]);return docRef(c,id)},onSnapshot:cb=>sub(()=>cb(snapCol(c)))});
   return{doc:p=>{const[c,id]=p.split("/");return docRef(c,id)},collection:colRef,
     async start(){const tick=async()=>{try{data=await call("data");emit()}catch(e){if(e.code!=="auth")console.warn(e)}};await tick();let last=Date.now();setInterval(()=>{if(!document.hidden&&Date.now()-last>=60000){last=Date.now();tick()}},5000);document.addEventListener("visibilitychange",()=>{if(!document.hidden&&Date.now()-last>15000){last=Date.now();tick()}})},
-    genpass:all=>call("genpass",{all:!!all}),
     batch:ops=>write(ops),
     audit:ym=>call("audit?ym="+encodeURIComponent(ym)),
     backup:()=>call("backup"),
     async restore(obj){data=await call("restore",obj);emit()},
-    async reset(scope){data=await call("reset",{scope,confirm:"TOZALASH"});emit()}}
+    async reset(scope){data=await call("reset",{scope,confirm:"TOZALASH"});emit()},
+    users:()=>call("users"),
+    userOp:body=>call("users",body),
+    async changePass(old,next){const j=await call("password",{old,next});AUTH.save({...AUTH,token:j.token});return j}}
 }
 async function getDl(){
   if(window.claude)return claude.use("downloads").catch(()=>null);
@@ -223,32 +219,19 @@ async function getDl(){
 }
 async function showLogin(){
   const box=$("#login");box.style.display="flex";box.hidden=false;
-  const role=()=>(document.querySelector('input[name="l_role"]:checked')||{}).value||"mudir";
-  const HINT={mudir:"Parolni kadrlar bo'limi yoki administrator beradi. Har bir bo'limning o'z paroli bor.",kadr:"Kadrlar bo'limining umumiy paroli. Administratordan oling.",buxg:"Buxgalteriyaning umumiy paroli. Administratordan oling.",admin:"Tizim administratori paroli."};
-  let depts=[];try{depts=await (await fetch("/api/depts")).json()}catch(e){}
-  if(!Array.isArray(depts)){$("#l_err").textContent=(depts&&depts.error)||"Serverga ulanib bo'lmadi. Internetni tekshirib, sahifani yangilang.";depts=[]}
-  const groups={};depts.sort((a,b)=>(a.order||0)-(b.order||0)).forEach(d=>(groups[d.group||""]=groups[d.group||""]||[]).push(d));
-  $("#l_dept").innerHTML=`<option value="">— Bo'limni tanlang —</option>`+Object.keys(groups).map(g=>{const o=groups[g].map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");return g?`<optgroup label="${esc(g)}">${o}</optgroup>`:o}).join("");
-  const sync=()=>{const r=role(),m=r==="mudir";$("#l_deptw").style.display=m?"":"none";
-    document.querySelectorAll(".lnum").forEach((el,i)=>el.textContent=(m?i+3:i+2)+".");$("#l_passhint").textContent=HINT[r]};
-  document.querySelectorAll('input[name="l_role"]').forEach(x=>x.onchange=()=>{sync();$("#l_err").textContent=""});
-  try{const last=JSON.parse(localStorage.getItem("tabel-login")||"{}");
-    if(last.role){const el=document.querySelector(`input[name="l_role"][value="${last.role}"]`);if(el)el.checked=true}
-    if(last.dept&&depts.some(d=>d.id===last.dept))$("#l_dept").value=last.dept;
-    $("#l_name").value=last.name||localStorage.getItem("tabel-name")||""}catch(e){}
-  sync();
+  try{$("#l_login").value=localStorage.getItem("tabel-last-login")||""}catch(e){}
+  ($("#l_login").value?$("#l_pass"):$("#l_login")).focus();
   $("#l_eye").onclick=()=>{const p=$("#l_pass"),show=p.type==="password";p.type=show?"text":"password";$("#l_eye").textContent=show?"Yashirish":"Ko'rsatish"};
   $("#loginForm").onsubmit=async e=>{e.preventDefault();const err=$("#l_err");err.textContent="";
-    const r=role(),dept=$("#l_dept").value,name=$("#l_name").value.trim(),pass=$("#l_pass").value;
-    if(r==="mudir"&&!dept){err.textContent="Bo'limingizni ro'yxatdan tanlang.";return $("#l_dept").focus()}
-    if(name.length<3){err.textContent="Ismingizni to'liq yozing (kamida 3 harf).";return $("#l_name").focus()}
+    const login=$("#l_login").value.trim().toLowerCase(),pass=$("#l_pass").value;
+    if(!login){err.textContent="Loginni kiriting.";return $("#l_login").focus()}
     if(!pass){err.textContent="Parolni kiriting.";return $("#l_pass").focus()}
     const btn=$("#l_go");btn.disabled=true;btn.textContent="Tekshirilmoqda…";
-    try{const res=await fetch("/api/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({role:r,dept,password:pass,name})});
+    try{const res=await fetch("/api/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({login,password:pass})});
       const j=await res.json().catch(()=>({}));
-      if(!res.ok){if(res.status===401)throw new Error(r==="mudir"?"Parol noto'g'ri. Bo'lim to'g'ri tanlanganini va parolni tekshiring.":"Parol noto'g'ri. Rol to'g'ri tanlanganini tekshiring.");throw new Error(j.error||"Kirib bo'lmadi. Keyinroq urinib ko'ring.")}
-      try{localStorage.setItem("tabel-login",JSON.stringify({role:r,dept,name}))}catch(x){}
-      AUTH.save({token:j.token,role:j.role,dept:j.dept||"",who:j.who||""});location.reload()}
+      if(!res.ok)throw new Error(res.status===401?"Login yoki parol noto'g'ri.":(j.error||"Kirib bo'lmadi. Keyinroq urinib ko'ring."));
+      try{localStorage.setItem("tabel-last-login",login)}catch(x){}
+      AUTH.save({token:j.token,role:j.role,dept:j.dept||"",who:j.who||"",login:j.login||login});location.reload()}
     catch(x){err.textContent=x.message;btn.disabled=false;btn.textContent="Kirish";$("#l_pass").select()}};
 }
 </script>
@@ -256,8 +239,8 @@ async function showLogin(){
 const MONTHS=["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentyabr","Oktabr","Noyabr","Dekabr"];
 const CODES=[["В","Dam olish / bayram"],["Б","Kasallik (mehnatga layoqatsizlik)"],["МТ","Mehnat ta'tili"],["X/C","Xizmat safari (namunadagi belgi)"],["ОУ","O'quv ta'tili"],["П","Progul (sababsiz)"],["А","Ma'muriyat ruxsati bilan ishga kelmagan"],["О","Navbatdagi ta'til"],["Р","Tug'ish bilan bog'liq ta'til"],["Г","Davlat majburiyati"],["Н","Tungi ish vaqti"],["С","Navbatdan tashqari ish"],["ВУ","O'qish bo'yicha dam olish"],["РП","Bayramda ishlangan kun"],["Ф","Haqiqatda ishlangan kun"]];
 const CLS={"В":"off","Б":"sick","МТ":"leave","О":"leave","ОУ":"leave","Р":"leave","X/C":"trip","Г":"trip"};
-const ROLE_TABS={mudir:["tabel","xodim"],kadr:["holat","tabel","xodim","jurnal"],buxg:["holat","tabel"],admin:["holat","tabel","xodim","sozlama","jurnal"]};
-const TAB_NAME={holat:"Holat",tabel:"Tabel",xodim:"Xodimlar",sozlama:"Sozlamalar",jurnal:"Jurnal"};
+const ROLE_TABS={mudir:["tabel","xodim"],kadr:["holat","tabel","xodim","jurnal"],buxg:["holat","tabel"],admin:["holat","tabel","xodim","sozlama","users","jurnal"]};
+const TAB_NAME={holat:"Holat",tabel:"Tabel",xodim:"Xodimlar",sozlama:"Sozlamalar",jurnal:"Jurnal",users:"Foydalanuvchilar"};
 const ST_NAME={draft:"Qoralama",submitted:"Tekshiruvda",approved:"Tasdiqlangan",returned:"Qaytarilgan"};
 const DEF_SET={institute:"Muassasa nomi",rector:"",prorector:"",hr:"",normHours:8,workdays:[],shortDays:[],
   holidays:["2026-01-01","2026-03-08","2026-03-21","2026-05-09","2026-09-01","2026-10-01","2026-12-08"]};
@@ -424,7 +407,7 @@ function render(){
   const ae=document.activeElement;
   if(ae&&ae.closest&&ae.closest("#view")&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName)){dirty=true;return}
   dirty=false;S.depts.sort((a,b)=>(a.order||0)-(b.order||0));
-  const tabs=ROLE_TABS[U.role].filter(t=>t!=="jurnal"||STANDALONE);if(!tabs.includes(U.tab))U.tab=tabs.includes("tabel")?"tabel":tabs[0];
+  const tabs=ROLE_TABS[U.role].filter(t=>(t!=="jurnal"&&t!=="users")||STANDALONE);if(!tabs.includes(U.tab))U.tab=tabs.includes("tabel")?"tabel":tabs[0];
   $("#role").value=U.role;
   const dsel=$("#dept");dsel.innerHTML=deptOptions();
   if(!S.depts.find(d=>d.id===U.dept)&&S.depts[0])U.dept=(S.depts.find(d=>!isPool(d))||S.depts[0]).id;dsel.value=U.dept;dsel.disabled=STANDALONE&&U.role==="mudir";
@@ -437,7 +420,7 @@ function render(){
   if(!db){v.innerHTML=`<div class="card empty">Ma'lumotlar bazasi bu ko'rinishda ishlamaydi. Sahifani tizimga kirgan holda oching.</div>`;return}
   if(!Object.values(S.ready).every(Boolean)){v.innerHTML=`<div class="card empty">Yuklanmoqda…</div>`;return}
   if(!S.depts.length&&U.tab!=="sozlama"){v.innerHTML=`<div class="card empty">Hali bo'lim yo'q. Admin rolida «Sozlamalar» bo'limidan birinchi bo'limni qo'shing.</div>`;return}
-  ({holat:vHolat,tabel:vTabel,xodim:vXodim,sozlama:vSozlama,jurnal:vJurnal})[U.tab](v);
+  ({holat:vHolat,tabel:vTabel,xodim:vXodim,sozlama:vSozlama,jurnal:vJurnal,users:vUsers})[U.tab](v);
 }
 function deptOptions(){
   const groups={};S.depts.forEach(d=>{(groups[d.group||""]=groups[d.group||""]||[]).push(d)});
@@ -771,8 +754,8 @@ function vSozlama(v){
     <p class="note" style="margin:8px 0 6px">Har qatorga bitta bo'lim: <b>Fakultet; Kafedra nomi; Mudir F.I.Sh.</b></p>
     <textarea id="d_bulk" placeholder="Fizika-matematika fakulteti; Matematika kafedrasi; Karimov A."></textarea>
     <div class="row" style="margin-top:8px"><button class="btn" data-act="bulkdept">Ro'yxatni qo'shish</button></div></details></div>
-   ${STANDALONE?`<div><h3 style="margin:6px 0 6px;font-size:14px">Bo'lim mudirlari parollari</h3><p class="note" style="margin:0 0 6px">Parolsiz bo'limlar uchun tasodifiy parol yaratiladi. Parollar faqat shu paytda ko'rinadi, nusxalab oling.</p>
-   <div class="row"><button class="btn" data-act="genpass">Parollarni yaratish</button><label class="note"><input type="checkbox" id="g_all"> hammasini qayta yaratish</label></div></div>`:""}</div></div>
+   ${STANDALONE?`<div><h3 style="margin:6px 0 6px;font-size:14px">Bo'lim mudirlari kirishi</h3><p class="note" style="margin:0 0 6px">Har bir mudirga alohida login va parol «Foydalanuvchilar» bo'limida beriladi. U yerda hisobi yo'q hamma bo'limlarga birdan hisob yaratish mumkin.</p>
+   <button class="btn" data-tab="users">Foydalanuvchilarga o'tish</button></div>`:""}</div></div>
    ${STANDALONE?`<div class="card"><h3 style="margin-top:0">Zaxira nusxa</h3>
    <p class="note">Barcha ma'lumot (bo'limlar, xodimlar, istisnolar, tabellar, sozlamalar) bitta JSON faylga yuklanadi. Har oy oxirida yuklab, xavfsiz joyda saqlang.</p>
    <div class="row"><button class="btn pri" data-act="backup">Zaxirani yuklab olish</button></div>
@@ -789,12 +772,71 @@ function vSozlama(v){
 let AUD={ym:"",list:null,at:0,busy:false};
 function vJurnal(v){
   if(AUD.ym!==U.ym||Date.now()-AUD.at>60000){if(!AUD.busy){AUD.busy=true;db.audit(U.ym).then(l=>{AUD={ym:U.ym,list:l,at:Date.now(),busy:false};render()}).catch(e=>{AUD.busy=false;toast(e.message||"Jurnal yuklanmadi")})}}
-  const OPN={set:"saqladi",update:"o'zgartirdi",delete:"o'chirdi",login:"kirdi",genpass:"parol yaratdi",backup:"zaxira oldi",restore:"zaxiradan tikladi"};
+  const OPN={set:"saqladi",update:"o'zgartirdi",delete:"o'chirdi",login:"kirdi",users:"foydalanuvchilar",password:"parolini o'zgartirdi",reset:"tozaladi",backup:"zaxira oldi",restore:"zaxiradan tikladi"};
   const COLN={exceptions:"Istisno",tabels:"Tabel",employees:"Xodim",departments:"Bo'lim",settings:"Sozlamalar"};
   const list=AUD.ym===U.ym&&AUD.list?AUD.list:null;
   v.innerHTML=`<div class="strip"><h2>${MONTHS[ymParts()[1]-1]} ${ymParts()[0]}: o'zgarishlar jurnali</h2><span class="note">Kim, qachon, nimani o'zgartirgani (oxirgi 1000 ta)</span></div>
    <div class="card scroll">${list?(list.length?`<table class="list"><thead><tr><th>Vaqt</th><th>Kim</th><th>Amal</th><th>Nima</th></tr></thead><tbody>${list.map(x=>`<tr><td class="num note">${new Date(x.at).toLocaleString("uz")}</td><td>${esc(x.who)}</td><td>${esc((COLN[x.col]?COLN[x.col]+": ":"")+(OPN[x.op]||x.op))}</td><td>${esc(x.s||"")}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Bu oyda yozuv yo'q.</div>`):`<div class="empty">Yuklanmoqda…</div>`}</div>`;
 }
+
+/* ---------- Foydalanuvchilar (admin) ---------- */
+let USR={list:null,at:0,busy:false,q:"",role:""};
+function loadUsers(force){if(USR.busy||(!force&&USR.list&&Date.now()-USR.at<60000))return;USR.busy=true;
+  db.users().then(l=>{USR.list=l;USR.at=Date.now();USR.busy=false;if(U.tab==="users")drawUsers()}).catch(e=>{USR.busy=false;toast(e.message||"Yuklanmadi")})}
+function vUsers(v){
+  v.innerHTML=`<div class="card"><div class="strip" style="margin-bottom:8px"><h2 style="font-size:16px">Foydalanuvchilar</h2><span class="note" id="us_n"></span><div class="grow"></div>
+    <button class="btn" data-act="bulkmudir">Mudirlar uchun hisob yaratish</button><button class="btn pri" data-act="newuser">+ Foydalanuvchi</button></div>
+   <p class="note" style="margin:0 0 10px">Har bir xodim o'z login va paroli bilan kiradi. Rol va bo'lim shu yerda belgilanadi. Asosiy «admin» hisobi paroli Netlify'dagi ADMIN_PASS.</p>
+   <div class="row" style="margin-bottom:10px"><input type="text" id="us_q" value="${esc(USR.q)}" placeholder="Login, F.I.Sh. yoki bo'lim" style="min-width:220px;flex:1 1 220px">
+    <div class="row chips" id="us_chips">${[["","Hammasi"],["admin","Admin"],["kadr","Kadrlar"],["buxg","Buxgalteriya"],["mudir","Mudirlar"]].map(([k,t])=>`<button class="chip" data-urole="${k}" aria-pressed="${USR.role===k}">${t}</button>`).join("")}</div></div>
+   <div class="scroll"><table class="list"><thead><tr><th>Login</th><th>F.I.Sh.</th><th>Rol</th><th>Bo'lim</th><th>Holat</th><th>Oxirgi kirish</th><th></th></tr></thead><tbody id="us_rows"><tr><td colspan="7" class="note">Yuklanmoqda…</td></tr></tbody></table></div></div>`;
+  loadUsers();if(USR.list)drawUsers();
+}
+function drawUsers(){
+  const tb=$("#us_rows");if(!tb||!USR.list)return;const q=USR.q.trim().toLowerCase();
+  const dn=id=>(S.depts.find(d=>d.id===id)||{}).name||"";
+  const list=USR.list.filter(u=>(!USR.role||u.role===USR.role)&&(!q||(u.login+" "+u.name+" "+dn(u.dept)).toLowerCase().includes(q))).sort((a,b)=>a.role.localeCompare(b.role)||a.login.localeCompare(b.login));
+  $("#us_n").textContent=`${USR.list.length} ta`;
+  tb.innerHTML=list.map(u=>`<tr><td><b>${esc(u.login)}</b></td><td>${esc(u.name)}</td><td>${esc(ROLE_LABEL[u.role]||u.role)}</td><td class="note">${esc(dn(u.dept))}</td>
+    <td>${u.active?`<span class="badge b-approved">Faol</span>`:`<span class="badge b-returned">Bloklangan</span>`}</td><td class="note num">${u.lastLogin?new Date(u.lastLogin).toLocaleString("uz"):"—"}</td>
+    <td><div class="row" style="gap:4px;flex-wrap:nowrap;justify-content:flex-end"><button class="btn mini" data-uedit="${esc(u.id)}">Tahrirlash</button><button class="btn mini" data-ureset="${esc(u.id)}">Parolni tiklash</button><button class="btn mini" data-ublock="${esc(u.id)}">${u.active?"Bloklash":"Faollashtirish"}</button><button class="btn mini dng" data-udel="${esc(u.id)}">O'chirish</button></div></td></tr>`).join("")
+    ||`<tr><td colspan="7" class="note">${USR.list.length?"Topilmadi":"Hali foydalanuvchi yo'q. «+ Foydalanuvchi» yoki «Mudirlar uchun hisob yaratish» tugmasini bosing."}</td></tr>`;
+}
+function showCreds(title,rows,note){
+  const txt=rows.map(r=>r.join("\t")).join("\n");
+  openPanel(`<h3>${esc(title)}</h3><div class="note">${note||"Parol faqat hozir ko'rinadi. Nusxalab, egasiga bering."}</div>
+   <div class="frm"><label class="full"><textarea id="cr_txt" readonly style="min-height:${Math.min(320,60+rows.length*22)}px">${esc(txt)}</textarea></label></div>
+   <div class="row"><button class="btn pri" id="cr_copy">Nusxalash</button><button class="btn" data-close>Yopish</button></div>`);
+  $("#cr_copy").onclick=()=>{$("#cr_txt").select();try{navigator.clipboard.writeText($("#cr_txt").value).then(()=>toast("Nusxalandi"),()=>document.execCommand("copy"))}catch(e){document.execCommand("copy")}};
+}
+function openUser(id){
+  const u=id?(USR.list||[]).find(x=>x.id===id):{login:"",name:"",role:"mudir",dept:""};if(!u)return;
+  const depts=S.depts.filter(d=>!isPool(d));
+  openPanel(`<h3>${id?"Foydalanuvchini tahrirlash":"Yangi foydalanuvchi"}</h3><div class="frm">
+   <label>Login<input type="text" id="u_login" value="${esc(u.login)}" autocapitalize="none" spellcheck="false" placeholder="masalan: kadr.ali"></label>
+   <label>Rol<select id="u_role">${Object.entries(ROLE_LABEL).map(([k,v])=>`<option value="${k}" ${u.role===k?"selected":""}>${v}</option>`).join("")}</select></label>
+   <label class="full">F.I.Sh.<input type="text" id="u_name" value="${esc(u.name)}"></label>
+   <label class="full" id="u_deptw">Bo'lim<select id="u_dept"><option value="">— Bo'limni tanlang —</option>${depts.map(d=>`<option value="${esc(d.id)}" ${u.dept===d.id?"selected":""}>${esc((d.group?d.group+" · ":"")+d.name)}</option>`).join("")}</select></label>
+   ${id?"":`<label class="full">Parol (bo'sh qoldirsangiz avtomatik yaratiladi)<input type="text" id="u_pass" autocomplete="new-password" placeholder="kamida 8 belgi"></label>`}
+   <div class="full note">Login: kichik lotin harflar, raqam, nuqta yoki chiziqcha (3–32 belgi).</div></div>
+   <div class="row"><button class="btn pri" id="u_save">Saqlash</button><button class="btn" data-close>Bekor qilish</button></div>`);
+  const sync=()=>{$("#u_deptw").hidden=$("#u_role").value!=="mudir"};$("#u_role").onchange=sync;sync();
+  $("#u_save").onclick=async()=>{
+    const body={login:$("#u_login").value.trim().toLowerCase(),name:$("#u_name").value.trim(),role:$("#u_role").value,dept:$("#u_dept").value};
+    try{if(id){await db.userOp({op:"update",id,...body});toast("Saqlandi");closePanel()}
+      else{const pw=$("#u_pass").value;const r=await db.userOp({op:"create",...body,...(pw?{password:pw}:{})});showCreds("Foydalanuvchi yaratildi",[["Login","Parol","F.I.Sh."],[r.login,r.password,body.name]])}
+      loadUsers(true)}catch(e){toast(e.message||"Xatolik")}};
+}
+function openMyPass(){
+  openPanel(`<h3>Parolni o'zgartirish</h3><div class="note">${esc(AUTH.who||"")} · login: ${esc(AUTH.login||"")}</div><div class="frm" style="grid-template-columns:1fr">
+   <label>Joriy parol<input type="password" id="mp_old" autocomplete="current-password"></label>
+   <label>Yangi parol (kamida 8 belgi)<input type="password" id="mp_new" autocomplete="new-password"></label>
+   <label>Yangi parol (takror)<input type="password" id="mp_new2" autocomplete="new-password"></label></div>
+   <div class="row"><button class="btn pri" id="mp_ok">Saqlash</button><button class="btn" data-close>Bekor qilish</button></div>`);
+  $("#mp_ok").onclick=async()=>{const n=$("#mp_new").value;if(n.length<8)return toast("Yangi parol kamida 8 belgi bo'lsin");if(n!==$("#mp_new2").value)return toast("Yangi parollar bir xil emas");
+    try{await db.changePass($("#mp_old").value,n);toast("Parol o'zgartirildi");closePanel()}catch(e){toast(e.message||"Xatolik")}};
+}
+document.addEventListener("input",e=>{if(e.target.id==="us_q"){USR.q=e.target.value;drawUsers()}});
 
 /* ---------- panel ---------- */
 function openPanel(html){$("#sheet").innerHTML=html;$("#panel").classList.add("open")}
@@ -957,6 +999,13 @@ document.addEventListener("click",async ev=>{
     t.dataset.pfx==="xf"?drawXList():drawFP();return}
   if(t.dataset.pg!=null){XF.page=+t.dataset.pg;drawXList();const tb=$("#x_rows");if(tb)tb.closest(".card").scrollIntoView({block:"start"});return}
   if(t.dataset.fpg!=null){FP.page=+t.dataset.fpg;drawFP();$("#fp_list").scrollTop=0;return}
+  if(t.dataset.urole!=null){USR.role=t.dataset.urole;document.querySelectorAll("#us_chips .chip").forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.urole===USR.role)));return drawUsers()}
+  if(t.dataset.uedit)return openUser(t.dataset.uedit);
+  if(t.dataset.ureset){const u=USR.list.find(x=>x.id===t.dataset.ureset);if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Rostdanmi?";return}
+    try{const r=await db.userOp({op:"resetpass",id:u.id});showCreds("Yangi parol",[["Login","Parol","F.I.Sh."],[r.login,r.password,u.name]],"Eski parol va ochiq sessiyalar bekor qilindi. Yangi parolni egasiga bering.");loadUsers(true)}catch(er){toast(er.message||"Xatolik")}return}
+  if(t.dataset.ublock){const u=USR.list.find(x=>x.id===t.dataset.ublock);try{await db.userOp({op:"update",id:u.id,active:!u.active});toast(u.active?"Bloklandi":"Faollashtirildi");loadUsers(true)}catch(er){toast(er.message||"Xatolik")}return}
+  if(t.dataset.udel){const u=USR.list.find(x=>x.id===t.dataset.udel);if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Rostdanmi?";return}
+    try{await db.userOp({op:"delete",id:u.id});toast(u.login+" o'chirildi");loadUsers(true)}catch(er){toast(er.message||"Xatolik")}return}
   if(t.dataset.edel){const e=S.emps.find(x=>x.id===t.dataset.edel);if(!e)return;
     if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Rostdanmi?";t.title=e.name+" o'chirilsinmi? Yana bir marta bosing.";setTimeout(()=>{if(t.isConnected){t.dataset.sure="";t.textContent="O'chirish"}},4000);return}
     try{await db.collection("employees").doc(e.id).delete();toast(e.name+" o'chirildi")}catch(er){toast("Xatolik: "+(er.message||er.code))}return}
@@ -1022,14 +1071,11 @@ document.addEventListener("click",async ev=>{
     if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Hamma ma'lumot almashtiriladi. Tasdiqlaysizmi?";return}
     try{const obj=JSON.parse(await f.text());await db.restore(obj);toast("Zaxiradan tiklandi")}catch(er){toast(er.message||"Fayl o'qilmadi")}
     t.dataset.sure="";t.textContent="Tiklash"}
-  else if(a==="genpass"){
-    try{const r=await db.genpass($("#g_all")&&$("#g_all").checked);
-      const txt=r.list.map(x=>[x.group,x.name,x.pass].join("\t")).join("\n");
-      openPanel(`<h3>Mudirlar parollari</h3><div class="note">${r.list.length} ta bo'lim. Fakultet, bo'lim, parol (Excel'ga qo'yish mumkin). Bu oyna yopilgach parollarni ko'rib bo'lmaydi.</div>
-        <div class="frm"><label class="full"><textarea id="g_txt" readonly style="min-height:200px">${esc(txt)}</textarea></label></div>
-        <div class="row"><button class="btn pri" id="g_copy">Nusxalash</button><button class="btn" data-close>Yopish</button></div>`);
-      $("#g_copy").onclick=()=>{$("#g_txt").select();try{navigator.clipboard.writeText($("#g_txt").value);toast("Nusxalandi")}catch(e){document.execCommand("copy")}};
-      if(!r.list.length)toast("Hamma bo'limda parol bor")}catch(e){toast("Xatolik: "+(e.message||e.code))}}
+  else if(a==="newuser")openUser(null);
+  else if(a==="bulkmudir"){
+    try{const r=await db.userOp({op:"bulkMudir"});if(!r.list.length)return toast("Hamma bo'limda mudir hisobi bor");
+      showCreds(`${r.list.length} ta mudir hisobi yaratildi`,[["Fakultet","Bo'lim","Login","Parol","F.I.Sh."],...r.list.map(x=>[x.group,x.dept,x.login,x.password,x.name])],"Parollar faqat hozir ko'rinadi. Nusxalab Excel'ga qo'ying va har bir mudirga o'zinikini bering. F.I.Sh. ni keyin «Tahrirlash» orqali to'g'rilash mumkin.");loadUsers(true)}
+    catch(er){toast(er.message||"Xatolik")}}
   else if(a==="newdept"){try{await db.collection("departments").add({name:"Yangi bo'lim",kind:"",order:S.depts.length+1});toast("Bo'lim qo'shildi. Nomini o'zgartiring")}catch(e){toast("Xatolik: "+(e.message||e.code))}}
 });
 $("#panel").addEventListener("click",e=>{if(e.target.id==="panel")closePanel()});
@@ -1048,8 +1094,9 @@ $("#prev").onclick=()=>shift(-1);$("#next").onclick=()=>shift(1);
     document.querySelector(".proto").hidden=true;
     if(!AUTH.load()){showLogin();return}
     U.role=AUTH.role;if(AUTH.dept)U.dept=AUTH.dept;
-    $("#role").disabled=true;$("#logout").hidden=false;$("#logout").onclick=logout;
-    if(AUTH.who){$("#whoami").textContent=AUTH.who;$("#whoami").hidden=false}
+    $("#role").closest(".ctl").hidden=true;$("#logout").hidden=false;$("#logout").onclick=logout;
+    $("#whoami").textContent=(AUTH.who||AUTH.login||"")+" · "+(ROLE_LABEL[AUTH.role]||"");$("#whoami").title=(AUTH.login?"Login: "+AUTH.login:"");$("#whoami").hidden=false;
+    if(AUTH.login!=="admin"){const pb=document.createElement("button");pb.className="btn";pb.id="mypass";pb.textContent="Parol";pb.title="Parolni o'zgartirish";$("#logout").before(pb);pb.onclick=openMyPass}
   }
   render();
   db=STANDALONE?makeDb():await claude.use("db").catch(()=>null);
