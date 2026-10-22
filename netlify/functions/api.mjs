@@ -284,6 +284,17 @@ export default async (req, context) => {
       return json({ app: "tabel-tizimi", version: 1, at: new Date().toISOString(), cols: maps });
     }
 
+    if (path === "reset" && req.method === "POST") {
+      if (a.role !== "admin") return json({ error: "Faqat admin" }, 403);
+      const { scope, confirm } = await req.json().catch(() => ({}));
+      if (confirm !== "TOZALASH" || !["staff", "all"].includes(scope)) return json({ error: "Tasdiqlash so'zi noto'g'ri" }, 400);
+      for (const c of ["employees", "exceptions", "tabels"]) await st.setJSON(c, {});
+      if (scope === "all") await st.setJSON("departments", {});
+      await st.set("seeded", "1");
+      await audit(st, [{ at: Date.now(), who: byLabel(a), op: "reset", s: scope === "all" ? "hamma ma'lumot tozalandi (bo'limlar ham)" : "xodimlar, istisnolar va tabellar tozalandi" }]);
+      return json(view((await loadAll(st)).maps, a));
+    }
+
     if (path === "restore" && req.method === "POST") {
       if (a.role !== "admin") return json({ error: "Faqat admin" }, 403);
       const body = await req.json();
